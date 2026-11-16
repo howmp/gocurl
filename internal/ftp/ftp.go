@@ -195,9 +195,6 @@ func ftpTLSConfig(o *config.Options, host string, implicit bool) (*tls.Config, b
 
 func ftpRemotePath(u *url.URL) string {
 	remotePath := u.Path
-	if unescaped, err := url.PathUnescape(remotePath); err == nil {
-		remotePath = unescaped
-	}
 	if idx := strings.Index(remotePath, ";type="); idx >= 0 {
 		remotePath = remotePath[:idx]
 	}
