@@ -155,34 +155,28 @@ func parseAuthChallenges(resp *http.Response) []authChallenge {
 
 func parseAuthChallenge(value string) []authChallenge {
 	var out []authChallenge
-	lower := strings.ToLower(value)
-	for pos := 0; pos < len(lower); {
-		idx := -1
-		scheme := ""
-		for _, candidate := range []string{"digest", "basic", "ntlm", "negotiate"} {
-			if i := strings.Index(lower[pos:], candidate); i >= 0 {
-				i += pos
-				if idx < 0 || i < idx {
-					idx = i
-					scheme = candidate
-				}
-			}
-		}
-		if idx < 0 {
+	for pos := 0; pos < len(value); {
+		pos = skipAuthSeparators(value, pos)
+		if pos >= len(value) {
 			break
 		}
-		end := len(value)
-		for _, candidate := range []string{"digest", "basic", "ntlm", "negotiate"} {
-			if i := strings.Index(lower[idx+len(scheme):], candidate); i >= 0 {
-				i += idx + len(scheme)
-				if i < end {
-					end = i
-				}
+		scheme, after := scanAuthToken(value, pos)
+		if scheme == "" {
+			pos = nextAuthComma(value, pos)
+			if pos < len(value) {
+				pos++
 			}
+			continue
 		}
-		part := strings.TrimSpace(value[idx+len(scheme) : end])
-		challenge := authChallenge{scheme: strings.ToUpper(scheme)}
-		if scheme == "digest" {
+		lowerScheme := asciiLower(scheme)
+		if !isSupportedAuthScheme(lowerScheme) {
+			pos = findNextAuthChallenge(value, after)
+			continue
+		}
+		end := findNextAuthChallenge(value, after)
+		part := strings.TrimSpace(value[after:end])
+		challenge := authChallenge{scheme: strings.ToUpper(lowerScheme)}
+		if lowerScheme == "digest" {
 			challenge.params = parseDigestParams(part)
 		} else {
 			challenge.token = strings.TrimSpace(part)
@@ -191,6 +185,131 @@ func parseAuthChallenge(value string) []authChallenge {
 		pos = end
 	}
 	return out
+}
+
+func asciiLower(value string) string {
+	out := []byte(value)
+	for i := range out {
+		if out[i] >= 'A' && out[i] <= 'Z' {
+			out[i] += 'a' - 'A'
+		}
+	}
+	return string(out)
+}
+
+func isSupportedAuthScheme(scheme string) bool {
+	switch scheme {
+	case "digest", "basic", "ntlm", "negotiate":
+		return true
+	default:
+		return false
+	}
+}
+
+func isAuthTokenChar(c byte) bool {
+	switch {
+	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		return true
+	}
+	switch c {
+	case '!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~':
+		return true
+	default:
+		return false
+	}
+}
+
+func scanAuthToken(value string, start int) (string, int) {
+	pos := start
+	for pos < len(value) && isAuthTokenChar(value[pos]) {
+		pos++
+	}
+	if pos == start {
+		return "", start
+	}
+	return value[start:pos], pos
+}
+
+func skipAuthWhitespace(value string, pos int) int {
+	for pos < len(value) && (value[pos] == ' ' || value[pos] == '\t') {
+		pos++
+	}
+	return pos
+}
+
+func skipAuthSeparators(value string, pos int) int {
+	for pos < len(value) {
+		pos = skipAuthWhitespace(value, pos)
+		if pos >= len(value) || value[pos] != ',' {
+			return pos
+		}
+		pos++
+	}
+	return pos
+}
+
+func nextAuthComma(value string, start int) int {
+	quoted := false
+	escaped := false
+	for i := start; i < len(value); i++ {
+		c := value[i]
+		if quoted {
+			if escaped {
+				escaped = false
+				continue
+			}
+			switch c {
+			case '\\':
+				escaped = true
+			case '"':
+				quoted = false
+			}
+			continue
+		}
+		switch c {
+		case '"':
+			quoted = true
+		case ',':
+			return i
+		}
+	}
+	return len(value)
+}
+
+func findNextAuthChallenge(value string, start int) int {
+	quoted := false
+	escaped := false
+	for i := start; i < len(value); i++ {
+		c := value[i]
+		if quoted {
+			if escaped {
+				escaped = false
+				continue
+			}
+			switch c {
+			case '\\':
+				escaped = true
+			case '"':
+				quoted = false
+			}
+			continue
+		}
+		switch c {
+		case '"':
+			quoted = true
+		case ',':
+			next := skipAuthWhitespace(value, i+1)
+			token, after := scanAuthToken(value, next)
+			if token == "" || !isSupportedAuthScheme(asciiLower(token)) {
+				continue
+			}
+			after = skipAuthWhitespace(value, after)
+			if after >= len(value) || value[after] != '=' {
+				return i
+			}
+		}
+	}
+	return len(value)
 }
 
 func parseDigestParams(value string) map[string]string {
@@ -315,7 +434,10 @@ func digestAuthorization(req *http.Request, params map[string]string, user, pass
 	cnonceBytes := make([]byte, 16)
 	_, _ = rand.Read(cnonceBytes)
 	cnonce := hex.EncodeToString(cnonceBytes)
-	nc := nextNonceCount(req.URL.Hostname(), realm, nonce)
+	nc, err := nextNonceCount(req.URL, realm, nonce)
+	if err != nil {
+		return "", err
+	}
 	ha1 := hashHex(hash, user+":"+realm+":"+pass)
 	if strings.HasSuffix(algorithm, "-SESS") {
 		ha1 = hashHex(hash, ha1+":"+nonce+":"+cnonce)
@@ -402,19 +524,33 @@ func hashRequestBody(hash func() hash.Hash, req *http.Request) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
+const maxNonceCounts = 4096
+
+type nonceCountEntry struct {
+	count uint32
+}
+
 var (
 	nonceCountMu sync.Mutex
-	nonceCounts  = make(map[string]uint32)
+	nonceCounts  = make(map[string]*nonceCountEntry)
 )
 
-func nextNonceCount(host, realm, nonce string) string {
-	key := host + "\x00" + realm + "\x00" + nonce
+func nextNonceCount(u *url.URL, realm, nonce string) (string, error) {
+	scheme, host, port := originOf(u)
+	key := scheme + "://" + host + ":" + port + "\x00" + realm + "\x00" + nonce
 	nonceCountMu.Lock()
-	if len(nonceCounts) > 4096 {
-		nonceCounts = make(map[string]uint32)
+	defer nonceCountMu.Unlock()
+	entry := nonceCounts[key]
+	if entry == nil {
+		if len(nonceCounts) >= maxNonceCounts {
+			return "", fmt.Errorf("digest nonce count table is full")
+		}
+		entry = &nonceCountEntry{}
+		nonceCounts[key] = entry
 	}
-	nonceCounts[key]++
-	count := nonceCounts[key]
-	nonceCountMu.Unlock()
-	return fmt.Sprintf("%08x", count)
+	if entry.count == ^uint32(0) {
+		return "", fmt.Errorf("digest nonce count exhausted")
+	}
+	entry.count++
+	return fmt.Sprintf("%08x", entry.count), nil
 }
