@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,6 +54,67 @@ func TestJSONEnvelope(t *testing.T) {
 	}
 	if _, ok := env["timing"].(map[string]any); !ok {
 		t.Fatalf("missing timing: %#v", env)
+	}
+}
+
+func TestJSONEnvelopeRedactsURLUserinfo(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "ok")
+	}))
+	defer srv.Close()
+	u, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.User = url.UserPassword("alice", "s3cret")
+
+	code, out, stderr := runGocurl(t, "-sS", "--json-envelope", u.String())
+	if code != 0 {
+		t.Fatalf("code=%d stderr=%q", code, stderr)
+	}
+	if strings.Contains(out, "s3cret") {
+		t.Fatalf("envelope leaked password: %q", out)
+	}
+	var env map[string]any
+	if err := json.Unmarshal([]byte(out), &env); err != nil {
+		t.Fatal(err)
+	}
+	if got := env["url"].(string); !strings.Contains(got, "REDACTED") || strings.Contains(got, "alice") {
+		t.Fatalf("url = %q", got)
+	}
+	request := env["request"].(map[string]any)
+	if got := request["url"].(string); strings.Contains(got, "s3cret") {
+		t.Fatalf("request.url = %q", got)
+	}
+	response := env["response"].(map[string]any)
+	if got := response["effective_url"].(string); strings.Contains(got, "s3cret") {
+		t.Fatalf("effective_url = %q", got)
+	}
+
+	code, out, stderr = runGocurl(t, "-sS", "--json-envelope", "--show-secrets", u.String())
+	if code != 0 || !strings.Contains(out, "s3cret") {
+		t.Fatalf("show-secrets code=%d out=%q stderr=%q", code, out, stderr)
+	}
+}
+
+func TestWriteOutRedactsURLUserinfo(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "ok")
+	}))
+	defer srv.Close()
+	u, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.User = url.UserPassword("alice", "s3cret")
+
+	code, out, stderr := runGocurl(t, "-sS", "-w", "%{url_effective}", u.String())
+	if code != 0 || strings.Contains(out, "s3cret") {
+		t.Fatalf("code=%d out=%q stderr=%q", code, out, stderr)
+	}
+	code, out, stderr = runGocurl(t, "-sS", "--show-secrets", "-w", "%{url_effective}", u.String())
+	if code != 0 || !strings.Contains(out, "s3cret") {
+		t.Fatalf("show-secrets code=%d out=%q stderr=%q", code, out, stderr)
 	}
 }
 

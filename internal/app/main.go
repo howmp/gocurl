@@ -474,7 +474,7 @@ func runOne(o *config.Options, rawURL string, idx int, stdout, stderr io.Writer)
 	}
 	var env *jsonEnvelope
 	if o.JsonEnvelope {
-		env = newJSONEnvelope(u)
+		env = newJSONEnvelope(u, o.ShowSecrets)
 		defer func() {
 			env.finish(retErr)
 			if err := env.write(stdout); err != nil && retErr == nil {
@@ -608,7 +608,7 @@ func executeHTTPTransfer(o *config.Options, u *url.URL, plan *httpTransferPlan, 
 			return nil, err
 		}
 
-		info = &output.ResponseInfo{Url: u.String(), Scheme: u.Scheme, Started: start, NumRetries: state.attempt}
+		info = &output.ResponseInfo{Url: redactURL(u, o.ShowSecrets), Scheme: u.Scheme, Started: start, NumRetries: state.attempt}
 		state.info = info
 		if o.Verbose {
 			output.PrintRequestVerbose(stderr, req, o)
@@ -714,7 +714,7 @@ func finalizeHTTPResponse(o *config.Options, u *url.URL, idx int, stdout, stderr
 	info.StatusCode = resp.StatusCode
 	info.HttpVersion = shortHTTPVersion(resp.Proto)
 	info.ContentType = resp.Header.Get("Content-Type")
-	info.Url = resp.Request.URL.String()
+	info.Url = redactURL(resp.Request.URL, o.ShowSecrets)
 	recordCookieHosts(o, resp.Request)
 	info.SizeHeader = output.ResponseHeaderSize(resp)
 	info.NumRedirects = redirectCount(resp.Request)
@@ -876,6 +876,18 @@ var credentialInURL = regexp.MustCompile(`://[^/\s@]+@`)
 
 func redactErrorText(text string) string {
 	return credentialInURL.ReplaceAllString(text, "://[REDACTED]@")
+}
+
+func redactURL(u *url.URL, showSecrets bool) string {
+	if u == nil {
+		return ""
+	}
+	if showSecrets || u.User == nil {
+		return u.String()
+	}
+	redacted := *u
+	redacted.User = url.User("REDACTED")
+	return redacted.String()
 }
 
 func reportError(stderr io.Writer, o *config.Options, code int, err error) {

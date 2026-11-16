@@ -103,11 +103,11 @@ type jsonEnvelope struct {
 	written  bool
 }
 
-func newJSONEnvelope(u *url.URL) *jsonEnvelope {
+func newJSONEnvelope(u *url.URL, showSecrets bool) *jsonEnvelope {
 	env := &jsonEnvelope{}
 	if u != nil {
-		env.URL = u.String()
-		env.Request.URL = u.String()
+		env.URL = redactURL(u, showSecrets)
+		env.Request.URL = redactURL(u, showSecrets)
 	}
 	return env
 }
@@ -117,7 +117,7 @@ func (env *jsonEnvelope) setRequest(req *http.Request, o *config.Options, bodyLe
 		return
 	}
 	env.Request.Method = req.Method
-	env.Request.URL = req.URL.String()
+	env.Request.URL = redactURL(req.URL, o.ShowSecrets)
 	env.Request.BodyBytes = bodyLen
 	env.Request.Target = o.RequestTarget
 	if env.Request.Target == "" {
@@ -172,9 +172,9 @@ func (env *jsonEnvelope) setResponse(resp *http.Response, showSecrets bool) {
 		Status:       resp.StatusCode,
 		StatusText:   resp.Status,
 		Proto:        resp.Proto,
-		EffectiveURL: resp.Request.URL.String(),
+		EffectiveURL: redactURL(resp.Request.URL, showSecrets),
 		Headers:      responseHeaderList(resp, showSecrets),
-		Redirects:    responseRedirects(resp.Request),
+		Redirects:    responseRedirects(resp.Request, showSecrets),
 	}
 	if values := resp.Header.Values("Set-Cookie"); len(values) > 0 {
 		if !showSecrets {
@@ -206,14 +206,14 @@ func responseHeaderList(resp *http.Response, showSecrets bool) []envelopeHeader 
 	return out
 }
 
-func responseRedirects(final *http.Request) []string {
+func responseRedirects(final *http.Request, showSecrets bool) []string {
 	if final == nil {
 		return nil
 	}
 	var reverse []string
 	for req := final; req != nil && req.Response != nil; req = req.Response.Request {
 		if req.Response.Request != nil && req.Response.Request.URL != nil {
-			reverse = append(reverse, req.Response.Request.URL.String())
+			reverse = append(reverse, redactURL(req.Response.Request.URL, showSecrets))
 		}
 	}
 	chain := make([]string, 0, len(reverse)+1)
@@ -221,7 +221,7 @@ func responseRedirects(final *http.Request) []string {
 		chain = append(chain, reverse[i])
 	}
 	if final.URL != nil {
-		chain = append(chain, final.URL.String())
+		chain = append(chain, redactURL(final.URL, showSecrets))
 	}
 	return chain
 }
