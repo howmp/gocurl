@@ -45,6 +45,23 @@ func (f *fakeSession) mdtm(string) (time.Time, error) {
 }
 func (f *fakeSession) Close() error { f.closeCount++; return nil }
 
+func TestSanitizeListField(t *testing.T) {
+	got := sanitizeListField("a\x1b[2Jb\r\nc\td\u202e中")
+	for _, bad := range []string{"\x1b", "\r", "\n", "\t", "\u202e"} {
+		if strings.Contains(got, bad) {
+			t.Fatalf("sanitized output still contains %q: %q", bad, got)
+		}
+	}
+	for _, want := range []string{`\x1b`, `\r`, `\n`, `\t`, `\u202e`, "中"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("sanitized output missing %q: %q", want, got)
+		}
+	}
+	if got := sanitizeListField("普通 文件名.txt"); got != "普通 文件名.txt" {
+		t.Fatalf("printable name changed: %q", got)
+	}
+}
+
 func TestSessionUpload(t *testing.T) {
 	o := config.NewOptions()
 	o.UploadFile = "-"

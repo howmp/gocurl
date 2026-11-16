@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -66,7 +67,7 @@ func (s *passiveSession) list(path string, names bool, w io.Writer) (int64, erro
 		}
 		var n int64
 		for _, name := range entries {
-			count, err := fmt.Fprintln(w, name)
+			count, err := fmt.Fprintln(w, sanitizeListField(name))
 			if err != nil {
 				return n, ftpWriteError(err)
 			}
@@ -87,9 +88,9 @@ func (s *passiveSession) list(path string, names bool, w io.Writer) (int64, erro
 		case ftp.EntryTypeLink:
 			mode = "lrwxrwxrwx"
 		}
-		line := fmt.Sprintf("%s %10d %s %s", mode, entry.Size, entry.Time.Format("Jan _2 15:04"), entry.Name)
+		line := fmt.Sprintf("%s %10d %s %s", mode, entry.Size, entry.Time.Format("Jan _2 15:04"), sanitizeListField(entry.Name))
 		if entry.Target != "" {
-			line += " -> " + entry.Target
+			line += " -> " + sanitizeListField(entry.Target)
 		}
 		count, err := fmt.Fprintln(w, line)
 		if err != nil {
@@ -98,6 +99,31 @@ func (s *passiveSession) list(path string, names bool, w io.Writer) (int64, erro
 		n += int64(count)
 	}
 	return n, nil
+}
+
+func sanitizeListField(value string) string {
+	var b strings.Builder
+	for _, r := range value {
+		if r == ' ' || strconv.IsPrint(r) {
+			b.WriteRune(r)
+			continue
+		}
+		switch r {
+		case '\r':
+			b.WriteString(`\r`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\t':
+			b.WriteString(`\t`)
+		default:
+			if r <= 0xff {
+				fmt.Fprintf(&b, `\x%02x`, r)
+			} else {
+				fmt.Fprintf(&b, `\u%04x`, r)
+			}
+		}
+	}
+	return b.String()
 }
 
 func (s *passiveSession) size(path string) (int64, error) { return s.conn.FileSize(path) }
