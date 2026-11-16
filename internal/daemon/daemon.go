@@ -70,7 +70,7 @@ func Run(args []string) int {
 		fmt.Fprintf(os.Stderr, "gocurl daemon: log directory: %v\n", err)
 		return 1
 	}
-	logFile, err := os.OpenFile(*logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	logFile, err := openDaemonLog(*logPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "gocurl daemon: log file: %v\n", err)
 		return 1

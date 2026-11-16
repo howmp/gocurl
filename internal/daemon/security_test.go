@@ -22,6 +22,21 @@ func TestEnsurePrivateDir(t *testing.T) {
 	}
 }
 
+func TestEnsurePrivateDirRejectsSymlink(t *testing.T) {
+	dir := t.TempDir()
+	real := filepath.Join(dir, "real")
+	if err := os.Mkdir(real, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if err := ensurePrivateDir(link); err == nil {
+		t.Fatal("expected symlink directory rejection")
+	}
+}
+
 func TestValidateDaemonSocketRejectsSymlink(t *testing.T) {
 	dir := t.TempDir()
 	_ = os.Chmod(dir, 0o700)

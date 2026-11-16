@@ -96,6 +96,15 @@ func TestParseAuthChallengeTokenBoundaries(t *testing.T) {
 	}
 }
 
+func FuzzParseAuthChallenge(f *testing.F) {
+	f.Add(`Digest realm="test", nonce="abc", qop="auth"`)
+	f.Add("İ digest")
+	f.Add(`Bearer realm="digest", Basic realm="x"`)
+	f.Fuzz(func(t *testing.T, value string) {
+		_ = parseAuthChallenge(value)
+	})
+}
+
 func TestParseAuthChallengeUnicodeNoPanic(t *testing.T) {
 	if got := parseAuthChallenge("İ digest"); len(got) != 0 {
 		t.Fatalf("unexpected challenges: %v", authSchemes(got))

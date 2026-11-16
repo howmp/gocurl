@@ -105,6 +105,17 @@ func TestExpandConfigArgsRejectsSymlink(t *testing.T) {
 	}
 }
 
+func TestExpandConfigArgsRejectsTooManyBytes(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "huge.conf")
+	line := strings.Repeat("x", 512<<10) + "\n"
+	if err := os.WriteFile(path, []byte(strings.Repeat(line, int(maxConfigBytes/(512<<10))+1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ExpandConfigArgs([]string{"--config", path}); err == nil {
+		t.Fatal("expected byte budget error")
+	}
+}
+
 func TestExpandConfigArgsRejectsTooManyLines(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "huge.conf")
 	var b strings.Builder

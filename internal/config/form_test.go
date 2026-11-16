@@ -6,6 +6,15 @@ import (
 	"testing"
 )
 
+func FuzzParseFormOption(f *testing.F) {
+	f.Add("a=b")
+	f.Add(`f=@/tmp/x;filename="x"`)
+	f.Fuzz(func(t *testing.T, value string) {
+		_, _ = ParseFormOption(value, false)
+		_, _ = ParseFormOption(value, true)
+	})
+}
+
 func TestParseFormOptionRejectsControlCharacters(t *testing.T) {
 	if _, err := ParseFormOption("a\r\nX-Injected: 1=value", false); err == nil {
 		t.Fatal("expected field name rejection")
