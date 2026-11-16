@@ -734,6 +734,27 @@ func TestH2CPriorKnowledge(t *testing.T) {
 	}
 }
 
+func TestH2CPriorKnowledgeRejectsHTTPSRedirect(t *testing.T) {
+	var tlsHits int32
+	tlsSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&tlsHits, 1)
+	}))
+	defer tlsSrv.Close()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, tlsSrv.URL+"/secure", http.StatusFound)
+	})
+	srv := httptest.NewServer(h2c.NewHandler(handler, &http2.Server{}))
+	defer srv.Close()
+
+	code, _, stderr := runGocurl(t, "-sS", "-k", "-L", "--http2-prior-knowledge", srv.URL+"/start")
+	if code == 0 || !strings.Contains(stderr, "h2c") {
+		t.Fatalf("code=%d stderr=%q", code, stderr)
+	}
+	if got := atomic.LoadInt32(&tlsHits); got != 0 {
+		t.Fatalf("TLS redirect target received %d requests", got)
+	}
+}
+
 func TestRedirectPost302(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

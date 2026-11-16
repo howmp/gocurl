@@ -2,10 +2,13 @@ package httpx
 
 import (
 	"context"
+	"fmt"
+	"net"
+	"strings"
+	"time"
+
 	"gocurl/internal/config"
 	"gocurl/internal/transport"
-	"net"
-	"time"
 
 	fhttp "github.com/bogdanfinn/fhttp"
 	h2 "github.com/bogdanfinn/fhttp/http2"
@@ -47,7 +50,16 @@ func newH2CClient(o *config.Options) (*fhttp.Client, error) {
 			return fhttp.ErrUseLastResponse
 		}
 	} else {
-		client.CheckRedirect = redirectFunc(o)
+		follow := redirectFunc(o)
+		client.CheckRedirect = func(req *fhttp.Request, via []*fhttp.Request) error {
+			if err := follow(req, via); err != nil {
+				return err
+			}
+			if !strings.EqualFold(req.URL.Scheme, "http") {
+				return fmt.Errorf("h2c mode cannot follow redirect to %s", req.URL.Scheme)
+			}
+			return nil
+		}
 	}
 	return client, nil
 }
