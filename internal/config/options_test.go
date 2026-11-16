@@ -118,6 +118,16 @@ func TestBoolOptionTable(t *testing.T) {
 	}
 }
 
+func TestNoLocationClearsTrusted(t *testing.T) {
+	o, err := ParseArgs([]string{"--location-trusted", "--no-location", "--location", "https://example.test/"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !o.Location || o.LocationTrusted {
+		t.Fatalf("Location=%v LocationTrusted=%v, want true/false", o.Location, o.LocationTrusted)
+	}
+}
+
 func TestLongValueOptionsParse(t *testing.T) {
 	values := map[string]string{
 		"header": "X-Test: value", "proxy-header": "X-Test: value",

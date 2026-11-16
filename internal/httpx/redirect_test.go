@@ -116,7 +116,7 @@ func TestRedirectSameHostKeepsCredentials(t *testing.T) {
 	}
 }
 
-func TestLocationTrustedRejectsHTTPSDowngrade(t *testing.T) {
+func TestLocationTrustedStripsCredentialsOnHTTPSDowngrade(t *testing.T) {
 	o := config.NewOptions()
 	o.Location = true
 	o.LocationTrusted = true
@@ -162,6 +162,41 @@ func TestRedirectPreservesMethodWhenConfigured(t *testing.T) {
 	}
 	if next.Method != http.MethodPost {
 		t.Fatalf("method = %q, want POST", next.Method)
+	}
+}
+
+func TestRedirectPreservesMethodMatrix(t *testing.T) {
+	cases := []struct {
+		status int
+		option func(*config.Options)
+		method string
+		next   string
+		want   string
+	}{
+		{http.StatusMovedPermanently, func(o *config.Options) { o.Post301 = true }, http.MethodPost, http.MethodGet, http.MethodPost},
+		{http.StatusFound, func(o *config.Options) { o.Post302 = true }, http.MethodPost, http.MethodGet, http.MethodPost},
+		{http.StatusSeeOther, func(o *config.Options) { o.Post303 = true }, http.MethodPost, http.MethodGet, http.MethodPost},
+		{http.StatusMovedPermanently, func(o *config.Options) { o.Post301 = true }, http.MethodHead, http.MethodGet, http.MethodGet},
+		{http.StatusFound, func(o *config.Options) {}, http.MethodPost, http.MethodGet, http.MethodGet},
+	}
+	for _, tc := range cases {
+		o := config.NewOptions()
+		tc.option(o)
+		prev, err := http.NewRequest(tc.method, "https://a.test/", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		next, err := http.NewRequest(tc.next, "https://a.test/next", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		next.Response = &http.Response{StatusCode: tc.status, Request: prev}
+		if err := redirectFunc(o)(next, []*http.Request{prev}); err != nil {
+			t.Fatal(err)
+		}
+		if next.Method != tc.want {
+			t.Errorf("status=%d method=%s: next method=%s, want %s", tc.status, tc.method, next.Method, tc.want)
+		}
 	}
 }
 

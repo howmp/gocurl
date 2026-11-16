@@ -259,7 +259,7 @@ var longBoolOptions = map[string]boolOption{
 	"list-only":              {func(o *Options) { o.ListOnly = true }},
 	"no-buffer":              {func(o *Options) { o.NoBuffer = true }},
 	"netrc":                  {func(o *Options) { o.Netrc = true }},
-	"no-location":            {func(o *Options) { o.Location = false }},
+	"no-location":            {func(o *Options) { o.Location = false; o.LocationTrusted = false }},
 	"no-include":             {func(o *Options) { o.Include = false }},
 	"no-head":                {func(o *Options) { o.Head = false }},
 	"no-insecure":            {func(o *Options) { o.Insecure = false }},

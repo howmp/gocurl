@@ -444,8 +444,19 @@ GOCURL_DAEMON_LOG=file    覆盖日志路径
 - `COOKIE_JAR`/`-c` 只导出本次目标 host 相关的 cookie；`-b` 字符串只作用于当前请求，
   不写入共享 daemon jar。
 - FTP 暂不支持 `--limit-rate`/`--max-filesize`；WS 不支持 `--limit-rate`，但支持
-  `--max-filesize` 作为单条消息解压后大小上限（默认 64 MiB），超限返回 63。
-  FTP 暂不支持 `--netrc`。
+  `--max-filesize` 作为单条消息解压后大小与累计输出上限（单条默认 64 MiB），
+  超限返回 63。FTP 暂不支持 `--netrc`。
+- HTTP 的 `--max-filesize` 限制的是解码后的响应体大小；未设置时默认不设上限。
+- `--deny-private-addresses` 默认关闭以保持 curl 兼容；开启后拒绝环回、私网、
+  链路本地、未指定、组播和 CGNAT 目标（直连、DoH、自定义 DNS、`--resolve`/
+  `--connect-to`）。`--doh-url` 必须是 HTTPS，且不接受 userinfo 或 fragment。
+- `--post301/302/303` 是显式保留方法/包体的开关，跨主机重定向时同样生效；
+  不需要跨源重放时不要开启。`--no-location` 会同时清除 `--location-trusted`
+  建立的状态。
+- 配置文件的嵌套 include 以顶层配置文件目录为根，拒绝逃逸路径、符号链接、
+  非普通文件；单文件与累计读取量、行数和展开参数数量均有上限。
+- Linux 上普通输出路径使用 `openat2(RESOLVE_NO_SYMLINKS)` 拒绝父目录符号链接；
+  其他平台至少拒绝末级符号链接。已存在的 `-o` 文件保持原权限，新建文件为 0600。
 - `--negotiate` 是 NTLM fallback，不是完整 Kerberos；`--ntlm` 依赖连接保持。
 - `--retry` 默认保持 curl 行为，会重试任意方法；非幂等智能体任务建议使用
   `--retry-idempotent`（只放行 GET/HEAD/PUT/DELETE/OPTIONS/TRACE）并配合
