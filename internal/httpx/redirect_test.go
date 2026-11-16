@@ -1,6 +1,8 @@
 package httpx
 
 import (
+	"io"
+	"strings"
 	"testing"
 
 	"gocurl/internal/config"
@@ -197,6 +199,44 @@ func TestRedirectPreservesMethodMatrix(t *testing.T) {
 		if next.Method != tc.want {
 			t.Errorf("status=%d method=%s: next method=%s, want %s", tc.status, tc.method, next.Method, tc.want)
 		}
+	}
+}
+
+func TestRedirectPost302CrossOriginPreservesBody(t *testing.T) {
+	o := config.NewOptions()
+	o.Post302 = true
+	const payload = "payload"
+	prev, err := http.NewRequest(http.MethodPost, "https://a.test/", strings.NewReader(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	prev.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(strings.NewReader(payload)), nil
+	}
+	prev.ContentLength = int64(len(payload))
+	prev.Header.Set("Content-Type", "text/plain")
+	next, err := http.NewRequest(http.MethodGet, "https://b.test/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next.Response = &http.Response{StatusCode: http.StatusFound, Request: prev}
+	if err := redirectFunc(o)(next, []*http.Request{prev}); err != nil {
+		t.Fatal(err)
+	}
+	if next.Method != http.MethodPost || next.ContentLength != int64(len(payload)) {
+		t.Fatalf("method=%q length=%d", next.Method, next.ContentLength)
+	}
+	if next.GetBody == nil {
+		t.Fatal("missing replay body")
+	}
+	body, err := next.GetBody()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer body.Close()
+	data, err := io.ReadAll(body)
+	if err != nil || string(data) != payload {
+		t.Fatalf("body=%q err=%v", data, err)
 	}
 }
 

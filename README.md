@@ -462,6 +462,8 @@ GOCURL_DAEMON_LOG=file    覆盖日志路径
   `--retry-idempotent`（只放行 GET/HEAD/PUT/DELETE/OPTIONS/TRACE）并配合
   `--retry-max-per-host` 限制每个主机名的重放预算。
 - 多目标任务使用 `--session` 或独立 `GOCURL_SOCKET` 隔离 Cookie 和连接池。
+- 主动 FTP 当前使用 `secsy/goftp`（2020 年伪版本），被动 FTP 使用
+  `jlaffaye/ftp`；两者并存，升级或迁移前需分别回归主动/被动模式。
 
 ## 配置文件
 
