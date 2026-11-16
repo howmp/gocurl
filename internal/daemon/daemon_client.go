@@ -449,12 +449,8 @@ func headersForDaemon(req *http.Request) (map[string][]string, []string) {
 func daemonTransportFromOptions(o *config.Options, target *url.URL) daemonTransport {
 	var t daemonTransport
 	transportFromOptions(&t, o)
-	proxyURL, _ := transport.ProxyURLFor(o, target)
-	if proxyURL == "" {
+	if o.ProxyDisabled {
 		t.ProxyMode = "direct"
-	} else {
-		t.ProxyMode = "proxy"
-		t.Proxy = proxyURL
 	}
 	t.CertFile = AbsPath(o.CertFile)
 	t.KeyFile = AbsPath(o.KeyFile)

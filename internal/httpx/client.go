@@ -1,7 +1,6 @@
 package httpx
 
 import (
-	"context"
 	"fmt"
 	"gocurl/internal/config"
 	"gocurl/internal/output"
@@ -433,52 +432,32 @@ func NewHTTPClient(o *config.Options, target *url.URL) (tls_client.HttpClient, e
 	if o.Insecure {
 		clientOpts = append(clientOpts, tls_client.WithInsecureSkipVerify())
 	}
-	customDial := len(o.Resolves) > 0 || len(o.ConnectTo) > 0 || transport.HasCustomDNS(o)
-	if o.ConnectTimeout > 0 && !customDial && o.UnixSocket == "" {
-		clientOpts = append(clientOpts, tls_client.WithDialer(net.Dialer{Timeout: o.ConnectTimeout}))
-	}
 	if o.Ipv4 {
 		clientOpts = append(clientOpts, tls_client.WithDisableIPV6())
 	} else if o.Ipv6 {
 		clientOpts = append(clientOpts, tls_client.WithDisableIPV4())
 	}
-	if !o.Location {
-		clientOpts = append(clientOpts, tls_client.WithNotFollowRedirects())
-	} else {
-		clientOpts = append(clientOpts, tls_client.WithCustomRedirectFunc(redirectFunc(o)))
-	}
 	proxy, err := transport.ProxyURLFor(o, target)
 	if err != nil {
 		return nil, err
+	}
+	hopDial := transport.NewHopProxyDialer(o)
+	hopDial.Record(target)
+	if o.Location {
+		clientOpts = append(clientOpts, tls_client.WithCustomRedirectFunc(redirectFuncWithRecorder(o, hopDial.Record)))
+	} else {
+		clientOpts = append(clientOpts, tls_client.WithNotFollowRedirects())
 	}
 	if o.UnixSocket != "" {
 		if proxy != "" {
 			return nil, fmt.Errorf("option --unix-socket cannot be combined with a proxy")
 		}
 		clientOpts = append(clientOpts, tls_client.WithDialContext(transport.DialUnixContext(o.UnixSocket, o.AbstractUnix)))
-	} else if customDial && proxy == "" {
-		clientOpts = append(clientOpts, tls_client.WithDialContext(
-			func(ctx context.Context, network, addr string) (net.Conn, error) {
-				return transport.DialHTTPContext(o, ctx, network, addr)
-			}))
-	} else if o.InterfaceName != "" && proxy == "" {
-		local, err := transport.LocalTCPAddr(o.InterfaceName)
-		if err != nil {
-			return nil, err
-		}
-		if local != nil {
-			clientOpts = append(clientOpts, tls_client.WithLocalAddr(*local))
-		}
+	} else {
+		clientOpts = append(clientOpts, tls_client.WithDialContext(hopDial.DialContext))
 	}
 	if proxy == "" && o.PreProxy != "" {
 		return nil, fmt.Errorf("option --preproxy requires a proxy")
-	}
-	if proxy != "" {
-		dial, err := transport.NewChainProxyContext(o, proxy)
-		if err != nil {
-			return nil, err
-		}
-		clientOpts = append(clientOpts, tls_client.WithDialContext(dial))
 	}
 	transportOptions, err := transport.LoadTransportOptions(o)
 	if err != nil {

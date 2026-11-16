@@ -1,8 +1,10 @@
 package httpx
 
 import (
-	"gocurl/internal/config"
+	"net/url"
 	"strings"
+
+	"gocurl/internal/config"
 
 	http "github.com/bogdanfinn/fhttp"
 )
@@ -12,6 +14,10 @@ func normalizeRedirectHost(host string) string {
 }
 
 func redirectFunc(o *config.Options) func(req *http.Request, via []*http.Request) error {
+	return redirectFuncWithRecorder(o, nil)
+}
+
+func redirectFuncWithRecorder(o *config.Options, record func(*url.URL)) func(req *http.Request, via []*http.Request) error {
 	return func(req *http.Request, via []*http.Request) error {
 		if len(via) >= o.MaxRedirs {
 			return &TooManyRedirectsError{Max: o.MaxRedirs}
@@ -60,6 +66,9 @@ func redirectFunc(o *config.Options) func(req *http.Request, via []*http.Request
 			if contentType := prev.Header.Get("Content-Type"); contentType != "" {
 				req.Header.Set("Content-Type", contentType)
 			}
+		}
+		if record != nil {
+			record(req.URL)
 		}
 		return nil
 	}

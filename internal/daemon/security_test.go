@@ -60,6 +60,23 @@ func TestTransportMappingRoundTrip(t *testing.T) {
 	}
 }
 
+func TestDaemonTransportKeepsProxyConfig(t *testing.T) {
+	o := config.NewOptions()
+	o.Proxy = "http://proxy.test:8080"
+	o.NoProxy = "internal.test"
+	target, _ := url.Parse("http://example.test/")
+	tr := daemonTransportFromOptions(o, target)
+	if tr.Proxy != o.Proxy || tr.NoProxy != o.NoProxy || tr.ProxyMode != "" {
+		t.Fatalf("proxy config changed: %+v", tr)
+	}
+	disabled := config.NewOptions()
+	disabled.ProxyDisabled = true
+	tr = daemonTransportFromOptions(disabled, target)
+	if tr.ProxyMode != "direct" || tr.Proxy != "" {
+		t.Fatalf("proxy disabled mapping = %+v", tr)
+	}
+}
+
 func TestTransportMappingCoversFields(t *testing.T) {
 	tr := daemonTransport{
 		HTTPVersion:     "1.1",

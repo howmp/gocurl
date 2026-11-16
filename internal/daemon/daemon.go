@@ -553,13 +553,16 @@ func (s *daemonState) getClient(o *config.Options, target *url.URL) (tls_client.
 
 func clientProfileKey(o *config.Options, target *url.URL) string {
 	transport := daemonTransportFromOptions(o, target)
+	targetKey := httpx.URLOriginKey(target)
 	payload := struct {
 		Transport daemonTransport `json:"transport"`
+		Target    string          `json:"target"`
 		CertStamp string          `json:"cert_stamp"`
 		KeyStamp  string          `json:"key_stamp"`
 		CAStamp   string          `json:"ca_stamp"`
 	}{
 		Transport: transport,
+		Target:    targetKey,
 		CertStamp: fileStamp(o.CertFile),
 		KeyStamp:  fileStamp(o.KeyFile),
 		CAStamp:   fileStamp(o.CaCert),

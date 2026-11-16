@@ -38,3 +38,8 @@ func SameOriginURL(a, b *url.URL) bool {
 	bScheme, bHost, bPort := originOf(b)
 	return aScheme == bScheme && aHost == bHost && aPort == bPort
 }
+
+func URLOriginKey(u *url.URL) string {
+	scheme, host, port := originOf(u)
+	return scheme + "://" + host + ":" + port
+}

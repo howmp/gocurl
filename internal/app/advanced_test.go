@@ -652,6 +652,65 @@ func TestProxyInsecure(t *testing.T) {
 	}
 }
 
+func TestProxySelectedPerRedirectHop(t *testing.T) {
+	proxied := make(chan string, 8)
+	proxySrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodConnect {
+			http.Error(w, "CONNECT required", http.StatusMethodNotAllowed)
+			return
+		}
+		proxied <- r.Host
+		dest, err := net.Dial("tcp", r.Host)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		hj := w.(http.Hijacker)
+		client, _, _ := hj.Hijack()
+		_, _ = client.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
+		go func() { _, _ = io.Copy(dest, client); _ = dest.Close() }()
+		_, _ = io.Copy(client, dest)
+		_ = client.Close()
+	}))
+	defer proxySrv.Close()
+
+	final := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "direct")
+	}))
+	defer final.Close()
+	start := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, final.URL, http.StatusFound)
+	}))
+	defer start.Close()
+
+	finalURL, err := url.Parse(final.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, out, stderr := runGocurl(t, "-sS", "-L", "-x", proxySrv.URL,
+		"--noproxy", "127.0.0.1:"+finalURL.Port(), start.URL)
+	if code != 0 || out != "direct" {
+		t.Fatalf("code=%d out=%q stderr=%q", code, out, stderr)
+	}
+	var seen []string
+collect:
+	for {
+		select {
+		case host := <-proxied:
+			seen = append(seen, host)
+		default:
+			break collect
+		}
+	}
+	startURL, err := url.Parse(start.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(seen) != 1 || seen[0] != startURL.Host {
+		t.Fatalf("proxy connections = %v, want only %q", seen, startURL.Host)
+	}
+}
+
 func TestPreProxy(t *testing.T) {
 	newProxy := func() *httptest.Server {
 		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
