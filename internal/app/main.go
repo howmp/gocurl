@@ -1043,22 +1043,50 @@ func resumeOutputOptions(o *config.Options, offset int64, u *url.URL, idx int, r
 	if resp.StatusCode != http.StatusPartialContent {
 		return nil, &exitcode.Coded{Code: exitcode.RangeError, Msg: fmt.Sprintf("HTTP server ignored resume request (status %d)", resp.StatusCode)}
 	}
-	if !contentRangeMatches(resp.Header.Get("Content-Range"), offset) {
+	start, end, _, ok := parseContentRange(resp.Header.Get("Content-Range"))
+	if !ok || start != offset {
 		return nil, &exitcode.Coded{Code: exitcode.RangeError, Msg: "HTTP Content-Range does not match resume offset"}
+	}
+	if resp.ContentLength >= 0 && end-start+1 != resp.ContentLength {
+		return nil, &exitcode.Coded{Code: exitcode.RangeError, Msg: "HTTP Content-Range does not match Content-Length"}
 	}
 	return output.ResumeOutput(o, u, idx, offset, false)
 }
 
 func contentRangeMatches(value string, offset int64) bool {
+	start, _, _, ok := parseContentRange(value)
+	return ok && start == offset
+}
+
+func parseContentRange(value string) (start, end, total int64, ok bool) {
 	value = strings.TrimSpace(value)
-	if !strings.HasPrefix(strings.ToLower(value), "bytes ") {
-		return false
+	if len(value) < len("bytes ") || !strings.EqualFold(value[:len("bytes ")], "bytes ") {
+		return 0, 0, 0, false
 	}
 	value = strings.TrimSpace(value[len("bytes "):])
-	start, _, ok := strings.Cut(value, "-")
-	if !ok {
-		return false
+	rangePart, totalPart, found := strings.Cut(value, "/")
+	if !found {
+		return 0, 0, 0, false
 	}
-	n, err := strconv.ParseInt(strings.TrimSpace(start), 10, 64)
-	return err == nil && n == offset
+	startPart, endPart, found := strings.Cut(rangePart, "-")
+	if !found {
+		return 0, 0, 0, false
+	}
+	start, err := strconv.ParseInt(strings.TrimSpace(startPart), 10, 64)
+	if err != nil || start < 0 {
+		return 0, 0, 0, false
+	}
+	end, err = strconv.ParseInt(strings.TrimSpace(endPart), 10, 64)
+	if err != nil || end < start {
+		return 0, 0, 0, false
+	}
+	totalPart = strings.TrimSpace(totalPart)
+	if totalPart == "*" {
+		return start, end, -1, true
+	}
+	total, err = strconv.ParseInt(totalPart, 10, 64)
+	if err != nil || total <= end {
+		return 0, 0, 0, false
+	}
+	return start, end, total, true
 }

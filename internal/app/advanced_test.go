@@ -385,6 +385,39 @@ func TestJSONOutputFlag(t *testing.T) {
 	}
 }
 
+func TestParseContentRange(t *testing.T) {
+	valid := []struct {
+		value      string
+		start, end int64
+		total      int64
+	}{
+		{"bytes 100-199/1000", 100, 199, 1000},
+		{"bytes 100-199/*", 100, 199, -1},
+		{"BYTES 0-0/1", 0, 0, 1},
+	}
+	for _, tc := range valid {
+		start, end, total, ok := parseContentRange(tc.value)
+		if !ok || start != tc.start || end != tc.end || total != tc.total {
+			t.Errorf("parseContentRange(%q) = %d,%d,%d,%v", tc.value, start, end, total, ok)
+		}
+	}
+	invalid := []string{
+		"bytes 100-50/999",
+		"bytes 100-garbage",
+		"bytes 100-100/50",
+		"bytes 100-/999",
+		"bytes 100-199",
+		"items 1-2/3",
+		"bytes 1-2/3/4",
+		"",
+	}
+	for _, value := range invalid {
+		if _, _, _, ok := parseContentRange(value); ok {
+			t.Errorf("parseContentRange(%q) accepted", value)
+		}
+	}
+}
+
 func TestMaxFilesize(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, strings.Repeat("x", 100))
