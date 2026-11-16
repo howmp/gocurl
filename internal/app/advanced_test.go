@@ -270,6 +270,67 @@ func TestDigestAuth(t *testing.T) {
 	}
 }
 
+func TestDigestAuthRetryRejectsCrossOriginChallenge(t *testing.T) {
+	var leaked atomic.Value
+	var sourceHits, targetHits int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&targetHits, 1)
+		w.Header().Set("WWW-Authenticate", `Digest realm="target", nonce="abc123", qop="auth", algorithm=MD5`)
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer target.Close()
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&sourceHits, 1)
+		if auth := r.Header.Get("Authorization"); auth != "" {
+			leaked.Store(auth)
+		}
+		http.Redirect(w, r, target.URL+"/protected", http.StatusFound)
+	}))
+	defer source.Close()
+
+	code, _, stderr := runGocurl(t, "-sS", "-L", "--digest", "-u", "user:pass", source.URL+"/start")
+	if code != 0 {
+		t.Fatalf("code=%d stderr=%q", code, stderr)
+	}
+	if got := leaked.Load(); got != nil {
+		t.Fatalf("cross-origin credentials leaked to source: %v", got)
+	}
+	if got := atomic.LoadInt32(&sourceHits); got != 1 {
+		t.Fatalf("source attempts=%d, want 1", got)
+	}
+	if got := atomic.LoadInt32(&targetHits); got != 1 {
+		t.Fatalf("target attempts=%d, want 1", got)
+	}
+}
+
+func TestDigestAuthRetrySameOriginRedirect(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/start":
+			if r.Header.Get("Authorization") == "" {
+				http.Redirect(w, r, "/protected", http.StatusFound)
+				return
+			}
+			fmt.Fprint(w, "same-origin-ok")
+		case "/protected":
+			if !strings.HasPrefix(r.Header.Get("Authorization"), "Digest ") {
+				w.Header().Set("WWW-Authenticate", `Digest realm="test", nonce="abc123", qop="auth", algorithm=MD5`)
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			fmt.Fprint(w, "protected")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	code, out, stderr := runGocurl(t, "-sS", "-L", "--digest", "-u", "user:pass", srv.URL+"/start")
+	if code != 0 || out != "same-origin-ok" {
+		t.Fatalf("code=%d out=%q stderr=%q", code, out, stderr)
+	}
+}
+
 func TestAnyAuthBasic(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(r.Header.Get("Authorization"), "Basic ") {

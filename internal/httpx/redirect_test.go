@@ -45,6 +45,9 @@ func TestRedirectToSubdomainStripsCredentials(t *testing.T) {
 	o.Location = true
 
 	req, via := redirectRequest(t, "https://first.test/", "https://a.first.test/")
+	req.Header.Set("Authorization", "Bearer NEXTSECRET")
+	req.Header.Set("Cookie", "sid=NEXTSECRET")
+	req.Header.Set("Cookie2", "sid2=NEXTSECRET")
 	if err := redirectFunc(o)(req, via); err != nil {
 		t.Fatal(err)
 	}
@@ -53,6 +56,45 @@ func TestRedirectToSubdomainStripsCredentials(t *testing.T) {
 	}
 	if got := req.Header.Get("Cookie"); got != "" {
 		t.Fatalf("Cookie leaked to subdomain: %q", got)
+	}
+	if got := req.Header.Get("Cookie2"); got != "" {
+		t.Fatalf("Cookie2 leaked to subdomain: %q", got)
+	}
+}
+
+func TestRedirectSameHostDifferentPortStripsCredentials(t *testing.T) {
+	o := config.NewOptions()
+	o.Location = true
+
+	req, via := redirectRequest(t, "https://first.test:443/a", "https://first.test:8443/b")
+	req.Header.Set("Authorization", "Bearer NEXTSECRET")
+	req.Header.Set("Cookie", "sid=NEXTSECRET")
+	if err := redirectFunc(o)(req, via); err != nil {
+		t.Fatal(err)
+	}
+	if got := req.Header.Get("Authorization"); got != "" {
+		t.Fatalf("Authorization leaked across ports: %q", got)
+	}
+	if got := req.Header.Get("Cookie"); got != "" {
+		t.Fatalf("Cookie leaked across ports: %q", got)
+	}
+}
+
+func TestRedirectSameOriginDefaultPortKeepsCredentials(t *testing.T) {
+	o := config.NewOptions()
+	o.Location = true
+
+	req, via := redirectRequest(t, "https://first.test/a", "https://first.test:443/b")
+	req.Header.Set("Authorization", "Bearer NEXTSECRET")
+	req.Header.Set("Cookie", "sid=NEXTSECRET")
+	if err := redirectFunc(o)(req, via); err != nil {
+		t.Fatal(err)
+	}
+	if got := req.Header.Get("Authorization"); got != "Bearer NEXTSECRET" {
+		t.Fatalf("Authorization = %q", got)
+	}
+	if got := req.Header.Get("Cookie"); got != "sid=NEXTSECRET" {
+		t.Fatalf("Cookie = %q", got)
 	}
 }
 
@@ -80,11 +122,16 @@ func TestLocationTrustedRejectsHTTPSDowngrade(t *testing.T) {
 	o.LocationTrusted = true
 
 	req, via := redirectRequest(t, "https://a.test/", "http://b.test/")
+	req.Header.Set("Authorization", "Bearer NEXTSECRET")
+	req.Header.Set("Cookie", "sid=NEXTSECRET")
 	if err := redirectFunc(o)(req, via); err != nil {
 		t.Fatal(err)
 	}
 	if got := req.Header.Get("Authorization"); got != "" {
 		t.Fatalf("Authorization leaked to http: %q", got)
+	}
+	if got := req.Header.Get("Cookie"); got != "" {
+		t.Fatalf("Cookie leaked to http: %q", got)
 	}
 }
 

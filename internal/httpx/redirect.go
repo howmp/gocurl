@@ -20,17 +20,17 @@ func redirectFunc(o *config.Options) func(req *http.Request, via []*http.Request
 			return nil
 		}
 		prev := via[len(via)-1]
-		prevHost := normalizeRedirectHost(prev.URL.Hostname())
-		nextHost := normalizeRedirectHost(req.URL.Hostname())
-		sameHost := prevHost == nextHost
-		downgrade := strings.EqualFold(prev.URL.Scheme, "https") && strings.EqualFold(req.URL.Scheme, "http")
+		prevScheme := strings.ToLower(prev.URL.Scheme)
+		nextScheme := strings.ToLower(req.URL.Scheme)
+		downgrade := (prevScheme == "https" && nextScheme == "http") ||
+			(prevScheme == "wss" && nextScheme == "ws")
+		crossOrigin := !SameOriginURL(prev.URL, req.URL)
 
-		if !sameHost || downgrade {
+		if crossOrigin || downgrade {
 			req.Header.Del("Cookie")
 			req.Header.Del("Cookie2")
-		}
-		if !sameHost || downgrade {
 			req.Header.Del("Authorization")
+			req.Header.Del("Proxy-Authorization")
 		}
 		if o.LocationTrusted && !downgrade {
 			if value := prev.Header.Get("Authorization"); value != "" && req.Header.Get("Authorization") == "" {

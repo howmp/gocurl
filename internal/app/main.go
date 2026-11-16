@@ -665,7 +665,7 @@ func executeHTTPTransfer(o *config.Options, u *url.URL, plan *httpTransferPlan, 
 			if resp.Request != nil && resp.Request.URL != nil {
 				authURL = resp.Request.URL
 			}
-			if !strings.EqualFold(authURL.Hostname(), u.Hostname()) {
+			if !httpx.SameOriginURL(authURL, u) {
 				authURL = nil
 			}
 			if authURL != nil {
@@ -676,6 +676,9 @@ func executeHTTPTransfer(o *config.Options, u *url.URL, plan *httpTransferPlan, 
 						return nil, authErr
 					}
 					if ok {
+						if !httpx.SameOriginURL(authURL, u) {
+							return nil, fmt.Errorf("refusing to send credentials across origins")
+						}
 						authHeader = next
 						authStage = nextStage
 						authTries++
