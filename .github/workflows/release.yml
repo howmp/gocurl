@@ -30,6 +30,8 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Verify modules
+        run: go mod verify
       - name: Vet
         run: go vet ./...
       - name: Test
