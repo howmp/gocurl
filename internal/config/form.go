@@ -34,11 +34,23 @@ type FormField struct {
 	Encoder     string
 }
 
+func validateFormFieldText(value string) error {
+	for i := 0; i < len(value); i++ {
+		if value[i] < 0x20 || value[i] == 0x7f {
+			return fmt.Errorf("form field contains control characters")
+		}
+	}
+	return nil
+}
+
 func ParseFormOption(v string, literal bool) (FormField, error) {
 	name, rest, ok := strings.Cut(v, "=")
 	name = strings.TrimSpace(name)
 	if !ok || name == "" {
-		return FormField{}, fmt.Errorf("invalid form field %q", v)
+		return FormField{}, fmt.Errorf("invalid form field")
+	}
+	if err := validateFormFieldText(name); err != nil {
+		return FormField{}, err
 	}
 	if literal {
 		return FormField{Name: name, Value: rest, Kind: FormText}, nil
@@ -78,9 +90,12 @@ func ParseFormOption(v string, literal bool) (FormField, error) {
 			return FormField{}, fmt.Errorf("form attribute %q is not supported", key)
 		}
 	}
+	if err := validateFormFieldText(field.Filename); err != nil {
+		return FormField{}, err
+	}
 	if kind == FormFile {
 		if field.Value == "" {
-			return FormField{}, fmt.Errorf("form field %q has no file name", name)
+			return FormField{}, fmt.Errorf("form field has no file name")
 		}
 	}
 	if kind == FormContent && field.ContentType == "" {
@@ -122,6 +137,9 @@ func BuildMultipartBody(fields []FormField) ([]byte, string, error) {
 				return nil, "", err
 			}
 			if field.ContentType == "" && field.Headers == "" && field.Encoder == "" {
+				if err := validateFormFieldText(field.Name); err != nil {
+					return nil, "", err
+				}
 				w, err := mw.CreateFormField(field.Name)
 				if err != nil {
 					return nil, "", err
@@ -189,6 +207,12 @@ type formPartSpec struct {
 }
 
 func buildFormPartHeader(name, filename, contentType, headers string) (*formPartSpec, error) {
+	if err := validateFormFieldText(name); err != nil {
+		return nil, err
+	}
+	if err := validateFormFieldText(filename); err != nil {
+		return nil, err
+	}
 	params := map[string]string{"name": name}
 	if filename != "" {
 		params["filename"] = filename
