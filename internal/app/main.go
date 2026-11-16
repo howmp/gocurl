@@ -63,12 +63,12 @@ func stopDaemonCommand(args []string) int {
 func run(args []string, stdout, stderr io.Writer) int {
 	expanded, err := config.ExpandConfigArgs(args)
 	if err != nil {
-		fmt.Fprintf(stderr, "gocurl: %s\n", err)
+		fmt.Fprintf(stderr, "gocurl: %s\n", redactErrorText(err.Error()))
 		return 2
 	}
 	ops, err := parseOperations(expanded)
 	if err != nil {
-		fmt.Fprintf(stderr, "gocurl: %s\n", err)
+		fmt.Fprintf(stderr, "gocurl: %s\n", redactErrorText(err.Error()))
 		fmt.Fprintf(stderr, "gocurl: try 'gocurl --help' for more information\n")
 		return 2
 	}

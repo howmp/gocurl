@@ -75,7 +75,7 @@ func ParseFormOption(v string, literal bool) (FormField, error) {
 		}
 		key, val, ok := strings.Cut(attr, "=")
 		if !ok {
-			return FormField{}, fmt.Errorf("invalid form attribute %q", attr)
+			return FormField{}, fmt.Errorf("invalid form attribute")
 		}
 		switch strings.ToLower(strings.TrimSpace(key)) {
 		case "type":
@@ -87,7 +87,7 @@ func ParseFormOption(v string, literal bool) (FormField, error) {
 		case "encoder":
 			field.Encoder = strings.ToLower(unquoteConfigValue(strings.TrimSpace(val)))
 		default:
-			return FormField{}, fmt.Errorf("form attribute %q is not supported", key)
+			return FormField{}, fmt.Errorf("form attribute is not supported")
 		}
 	}
 	if err := validateFormFieldText(field.Filename); err != nil {
@@ -235,11 +235,11 @@ func buildFormPartHeader(name, filename, contentType, headers string) (*formPart
 	for _, line := range lines {
 		field, value, ok := strings.Cut(line, ":")
 		if !ok {
-			return nil, fmt.Errorf("invalid form header %q", line)
+			return nil, fmt.Errorf("invalid form header")
 		}
 		field, value = strings.TrimSpace(field), strings.TrimSpace(value)
 		if !httpguts.ValidHeaderFieldName(field) || !httpguts.ValidHeaderFieldValue(value) {
-			return nil, fmt.Errorf("invalid form header %q", line)
+			return nil, fmt.Errorf("invalid form header")
 		}
 		header.extra = append(header.extra, [2]string{field, value})
 	}

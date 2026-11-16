@@ -685,7 +685,7 @@ func parseHeaderArg(v string) (HeaderArg, error) {
 		h.Name = strings.TrimSpace(v[:idx])
 		h.Value = strings.TrimLeft(v[idx+1:], " \t")
 		if h.Name == "" {
-			return h, &optionError{fmt.Sprintf("invalid header %q", v)}
+			return h, &optionError{"invalid header"}
 		}
 		if h.Value == "" {
 			h.Remove = true
@@ -696,11 +696,11 @@ func parseHeaderArg(v string) (HeaderArg, error) {
 		h.Name = strings.TrimSpace(strings.TrimSuffix(v, ";"))
 		h.Empty = true
 		if h.Name == "" {
-			return h, &optionError{fmt.Sprintf("invalid header %q", v)}
+			return h, &optionError{"invalid header"}
 		}
 		return h, nil
 	}
-	return h, &optionError{fmt.Sprintf("invalid header %q", v)}
+	return h, &optionError{"invalid header"}
 }
 
 func parseSeconds(v string) (time.Duration, error) {

@@ -187,6 +187,17 @@ func TestHTTPOnlyOptionsRejectedForFTP(t *testing.T) {
 	}
 }
 
+func TestParseErrorsRedactSensitiveValues(t *testing.T) {
+	code, _, stderr := runGocurl(t, "-sS", "-H", "Authorization: Bearer SECRET\r\nX: 1", "http://127.0.0.1:1/")
+	if code == 0 || strings.Contains(stderr, "SECRET") {
+		t.Fatalf("code=%d stderr=%q", code, stderr)
+	}
+	code, _, stderr = runGocurl(t, "-sS", "-F", `a=v;filename="x\r\nY: SECRET"`, "http://127.0.0.1:1/")
+	if code == 0 || strings.Contains(stderr, "SECRET") {
+		t.Fatalf("code=%d stderr=%q", code, stderr)
+	}
+}
+
 func TestMaxFilesizeRejectedForFTP(t *testing.T) {
 	code, _, stderr := runGocurl(t, "-sS", "--max-filesize", "1k", "ftp://example.test/")
 	if code != 1 || !strings.Contains(stderr, "not supported for FTP") {
