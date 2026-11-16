@@ -15,7 +15,7 @@ import (
 type trackedCookieJar struct {
 	jar     *cookiejar.Jar
 	mu      sync.RWMutex
-	cookies map[string]trackedCookie
+	cookies map[cookieTrackKey]trackedCookie
 }
 
 type trackedCookie struct {
@@ -23,9 +23,16 @@ type trackedCookie struct {
 	cookie *http.Cookie
 }
 
+type cookieTrackKey struct {
+	group    string
+	path     string
+	name     string
+	hostOnly bool
+}
+
 func newTrackedCookieJar() *trackedCookieJar {
 	jar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
-	return &trackedCookieJar{jar: jar, cookies: make(map[string]trackedCookie)}
+	return &trackedCookieJar{jar: jar, cookies: make(map[cookieTrackKey]trackedCookie)}
 }
 
 func (j *trackedCookieJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
@@ -38,12 +45,15 @@ func (j *trackedCookieJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
 			continue
 		}
 		group := cookieGroup(u, cookie)
-		key := cookieKey(group, cookie)
+		key := cookieKey(u, cookie)
 		if cookie.MaxAge < 0 || (!cookie.Expires.IsZero() && cookie.Expires.Before(now)) {
 			delete(j.cookies, key)
 			continue
 		}
 		copied := *cookie
+		if copied.Path == "" || !strings.HasPrefix(copied.Path, "/") {
+			copied.Path = key.path
+		}
 		if copied.MaxAge > 0 && copied.Expires.IsZero() {
 			copied.Expires = now.Add(time.Duration(copied.MaxAge) * time.Second)
 		}
@@ -81,12 +91,30 @@ func cookieGroup(u *url.URL, cookie *http.Cookie) string {
 	return normalizeCookieHost(u.Hostname())
 }
 
-func cookieKey(group string, cookie *http.Cookie) string {
-	pathValue := cookie.Path
-	if pathValue == "" {
-		pathValue = "/"
+func cookieKey(u *url.URL, cookie *http.Cookie) cookieTrackKey {
+	return cookieTrackKey{
+		group:    cookieGroup(u, cookie),
+		path:     cookiePath(u, cookie),
+		name:     cookie.Name,
+		hostOnly: cookie.Domain == "",
 	}
-	return group + "\x00" + pathValue + "\x00" + cookie.Name
+}
+
+func cookiePath(u *url.URL, cookie *http.Cookie) string {
+	if cookie.Path != "" && strings.HasPrefix(cookie.Path, "/") {
+		return cookie.Path
+	}
+	if u == nil {
+		return "/"
+	}
+	pathValue := u.Path
+	if pathValue == "" || pathValue[0] != '/' {
+		return "/"
+	}
+	if idx := strings.LastIndexByte(pathValue, '/'); idx > 0 {
+		return pathValue[:idx]
+	}
+	return "/"
 }
 
 func validTrackedCookie(u *url.URL, cookie *http.Cookie) bool {

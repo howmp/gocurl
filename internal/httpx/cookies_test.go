@@ -30,6 +30,53 @@ func cookieLines(text string) []string {
 	return lines
 }
 
+func TestCookieKeyDistinguishesHostOnlyAndDomain(t *testing.T) {
+	jar := NewCookieJar()
+	u, err := NormalizeURL("https://example.com/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	jar.SetCookies(u, []*http.Cookie{{Name: "sid", Value: "host", Path: "/"}})
+	jar.SetCookies(u, []*http.Cookie{{Name: "sid", Value: "domain", Domain: "example.com", Path: "/"}})
+	cookies := jar.GetAllCookies()["example.com"]
+	if len(cookies) != 2 {
+		t.Fatalf("cookies = %d, want 2", len(cookies))
+	}
+	lines := cookieLines(CookieFileTextAll(jar))
+	if len(lines) != 2 {
+		t.Fatalf("export lines = %v, want 2", lines)
+	}
+	var hostOnly, domain int
+	for _, line := range lines {
+		fields := strings.Split(line, "\t")
+		if len(fields) < 3 {
+			t.Fatalf("bad line %q", line)
+		}
+		if fields[1] == "FALSE" {
+			hostOnly++
+		}
+		if fields[1] == "TRUE" {
+			domain++
+		}
+	}
+	if hostOnly != 1 || domain != 1 {
+		t.Fatalf("host-only=%d domain=%d lines=%v", hostOnly, domain, lines)
+	}
+}
+
+func TestCookieDefaultPathUsesRequestPath(t *testing.T) {
+	jar := NewCookieJar()
+	u, err := NormalizeURL("https://example.com/admin/page")
+	if err != nil {
+		t.Fatal(err)
+	}
+	jar.SetCookies(u, []*http.Cookie{{Name: "k", Value: "v"}})
+	cookies := jar.GetAllCookies()["example.com"]
+	if len(cookies) != 1 || cookies[0].Path != "/admin" {
+		t.Fatalf("cookies = %#v", cookies)
+	}
+}
+
 func TestCookieExportFiltersToRequestedHosts(t *testing.T) {
 	jar := NewCookieJar()
 	setCookie(t, jar, "http://example.test:28090/x", "a", "1")
