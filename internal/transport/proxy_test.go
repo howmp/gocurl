@@ -55,6 +55,34 @@ func TestConnectHTTPProxyHonorsContextCancellation(t *testing.T) {
 	}
 }
 
+func TestConnectHTTPProxyRejectsInjectedTarget(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	dialed := make(chan struct{}, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		dialed <- struct{}{}
+		_ = conn.Close()
+	}()
+	proxyURL := &url.URL{Scheme: "http", Host: ln.Addr().String()}
+	_, err = connectHTTPProxy(context.Background(), proxyURL,
+		"example.test:443\r\nX-Injected: yes", time.Second, nil, false, (&net.Dialer{}).DialContext)
+	if err == nil || !strings.Contains(err.Error(), "CONNECT target") {
+		t.Fatalf("err = %v", err)
+	}
+	select {
+	case <-dialed:
+		t.Fatal("proxy dial was attempted for an invalid target")
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
 func TestNormalizeProxyPortSocks(t *testing.T) {
 	u, err := url.Parse("socks5://proxy.test")
 	if err != nil {

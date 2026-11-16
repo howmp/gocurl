@@ -113,6 +113,9 @@ func proxyDialAddress(proxyURL *url.URL) string {
 }
 
 func connectHTTPProxy(ctx context.Context, proxyURL *url.URL, target string, timeout time.Duration, headers fhttp.Header, insecure bool, dial func(context.Context, string, string) (net.Conn, error)) (*bufferedConn, error) {
+	if err := config.ValidateConnectTarget(target); err != nil {
+		return nil, err
+	}
 	conn, err := dial(ctx, "tcp", proxyDialAddress(proxyURL))
 	if err != nil {
 		return nil, err

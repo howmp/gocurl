@@ -5,6 +5,8 @@ import (
 	"net"
 	"strconv"
 	"strings"
+
+	"golang.org/x/net/http/httpguts"
 )
 
 func parseConnectToOption(o *Options, raw string) error {
@@ -17,8 +19,81 @@ func parseConnectToOption(o *Options, raw string) error {
 	if host == "" || parts[1] == "" || targetHost == "" || parts[3] == "" {
 		return fmt.Errorf("option --connect-to: invalid value %q", raw)
 	}
+	if !validConfigHost(host) || !validConfigHost(targetHost) {
+		return fmt.Errorf("option --connect-to: invalid host in %q", raw)
+	}
+	if err := validateConfigPort(parts[1]); err != nil {
+		return fmt.Errorf("option --connect-to: invalid source port in %q", raw)
+	}
+	if err := validateConfigPort(parts[3]); err != nil {
+		return fmt.Errorf("option --connect-to: invalid target port in %q", raw)
+	}
 	o.ConnectTo[host+":"+parts[1]] = net.JoinHostPort(targetHost, parts[3])
 	return nil
+}
+
+func validConfigHost(host string) bool {
+	if host == "" || strings.ContainsAny(host, " \t\r\n") {
+		return false
+	}
+	if net.ParseIP(host) != nil {
+		return true
+	}
+	return httpguts.ValidHostHeader(host)
+}
+
+func validateConfigPort(port string) error {
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 1 || n > 65535 {
+		return fmt.Errorf("invalid port")
+	}
+	return nil
+}
+
+func ValidateConnectTarget(target string) error {
+	host, port, err := net.SplitHostPort(target)
+	if err != nil || host == "" || !validConfigHost(host) {
+		return fmt.Errorf("invalid CONNECT target")
+	}
+	if err := validateConfigPort(port); err != nil {
+		return fmt.Errorf("invalid CONNECT target port")
+	}
+	return nil
+}
+
+func ValidateResolveMaps(resolves map[string][]string, connectTo map[string]string) error {
+	for key, addrs := range resolves {
+		host, port, ok := splitConfigHostPort(key)
+		if !ok || !validConfigHost(host) || validateConfigPort(port) != nil {
+			return fmt.Errorf("invalid resolve entry")
+		}
+		if len(addrs) == 0 {
+			return fmt.Errorf("resolve entry has no addresses")
+		}
+		for _, addr := range addrs {
+			if net.ParseIP(addr) == nil {
+				return fmt.Errorf("invalid resolve address")
+			}
+		}
+	}
+	for key, target := range connectTo {
+		host, port, ok := splitConfigHostPort(key)
+		if !ok || !validConfigHost(host) || validateConfigPort(port) != nil {
+			return fmt.Errorf("invalid connect-to entry")
+		}
+		if err := ValidateConnectTarget(target); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func splitConfigHostPort(value string) (host, port string, ok bool) {
+	idx := strings.LastIndexByte(value, ':')
+	if idx <= 0 || idx == len(value)-1 {
+		return "", "", false
+	}
+	return value[:idx], value[idx+1:], true
 }
 
 func splitConnectTo(v string) ([]string, error) {
@@ -65,6 +140,12 @@ func parseResolveOption(o *Options, raw string) error {
 		return fmt.Errorf("option --resolve: invalid value %q", raw)
 	}
 	host := NormalizeResolveHost(parts[0])
+	if !validConfigHost(host) {
+		return fmt.Errorf("option --resolve: invalid host in %q", raw)
+	}
+	if err := validateConfigPort(parts[1]); err != nil {
+		return fmt.Errorf("option --resolve: invalid port in %q", raw)
+	}
 	key := host + ":" + parts[1]
 	if remove {
 		delete(o.Resolves, key)
@@ -78,7 +159,7 @@ func parseResolveOption(o *Options, raw string) error {
 		addr = strings.TrimSpace(addr)
 		addr = strings.TrimPrefix(addr, "[")
 		addr = strings.TrimSuffix(addr, "]")
-		if addr == "" {
+		if net.ParseIP(addr) == nil {
 			return fmt.Errorf("option --resolve: invalid address in %q", raw)
 		}
 		addrs = append(addrs, addr)

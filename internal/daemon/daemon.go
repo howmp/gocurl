@@ -615,6 +615,9 @@ func validateDaemonRequest(req *daemonRequest) error {
 	if err := httpx.ValidateRequestTarget(req.RequestTarget); err != nil {
 		return err
 	}
+	if err := config.ValidateResolveMaps(req.Transport.Resolve, req.Transport.ConnectTo); err != nil {
+		return err
+	}
 	for name, values := range req.Headers {
 		if !httpguts.ValidHeaderFieldName(name) {
 			return fmt.Errorf("invalid daemon header name %q", name)
