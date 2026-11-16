@@ -1,17 +1,61 @@
 package output
 
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+)
+
 func WriteFile(path string, data []byte) error {
-	f, err := openOutputFile(path, false, true)
+	if info, err := os.Lstat(path); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("output path is a symlink")
+		}
+		if !info.Mode().IsRegular() {
+			f, err := openOutputFile(path, false, true)
+			if err != nil {
+				return err
+			}
+			if _, err := f.Write(data); err != nil {
+				_ = f.Close()
+				return err
+			}
+			return f.Close()
+		}
+	}
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
 	if err != nil {
 		return err
 	}
-	if err := f.Chmod(0o600); err != nil {
-		_ = f.Close()
+	tmpName := tmp.Name()
+	cleanup := func() {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+	}
+	if err := tmp.Chmod(0o600); err != nil {
+		cleanup()
 		return err
 	}
-	if _, err := f.Write(data); err != nil {
-		_ = f.Close()
+	if _, err := tmp.Write(data); err != nil {
+		cleanup()
 		return err
 	}
-	return f.Close()
+	if err := tmp.Sync(); err != nil {
+		cleanup()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if d, err := os.Open(dir); err == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
+	return nil
 }

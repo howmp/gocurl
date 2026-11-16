@@ -228,14 +228,20 @@ func ResolveResumeOffset(o *config.Options, u *url.URL, idx int) (int64, error) 
 	if name == "" || name == "-" {
 		return 0, fmt.Errorf("option --continue-at: output file is required for '-'")
 	}
-	info, err := os.Stat(name)
-	if err == nil {
-		return info.Size(), nil
+	f, err := openOutputFilePlatform(name, os.O_RDONLY)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil
+		}
+		return 0, err
 	}
-	if os.IsNotExist(err) {
-		return 0, nil
+	info, statErr := f.Stat()
+	_ = f.Close()
+	if statErr != nil {
+		return 0, statErr
 	}
-	return 0, err
+	o.ResumeOffset = info.Size()
+	return info.Size(), nil
 }
 
 func OutputWriter(o *config.Options, u *url.URL, idx int, stdout io.Writer) (io.Writer, func() error, error) {
@@ -259,8 +265,16 @@ func OutputWriter(o *config.Options, u *url.URL, idx int, stdout io.Writer) (io.
 			}
 		}
 	}
-	f, err := openOutputFile(name, o.AppendOutput, !o.AppendOutput)
+	var f *os.File
+	if o.ContinueAtSet && o.ResumeOffset >= 0 {
+		f, err = openResumeOutput(name, o.ResumeOffset)
+	} else {
+		f, err = openOutputFile(name, o.AppendOutput, !o.AppendOutput)
+	}
 	if err != nil {
+		if coded, ok := err.(*exitcode.Coded); ok {
+			return nil, nil, coded
+		}
 		return nil, nil, &exitcode.WriteError{Err: err}
 	}
 	w, flush := bufferedOutput(f, o.NoBuffer, false)

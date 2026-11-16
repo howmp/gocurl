@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -170,6 +171,126 @@ func TestWriteFileForcesPrivateMode(t *testing.T) {
 	}
 	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("mode = %o, want 600", info.Mode().Perm())
+	}
+}
+
+func TestWriteFileAtomicReplace(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "jar")
+	if err := os.WriteFile(path, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteFile(path, []byte("new")); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != "new" {
+		t.Fatalf("data=%q err=%v", data, err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("mode = %o, want 600", info.Mode().Perm())
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("temporary files left behind: %v", entries)
+	}
+}
+
+func TestOutputWriterKeepsExistingMode(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "out")
+	if err := os.WriteFile(path, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	o := config.NewOptions()
+	o.Outputs = []string{path}
+	w, closeOut, err := OutputWriter(o, &url.URL{Scheme: "https", Host: "example.test"}, 0, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write([]byte("new")); err != nil {
+		t.Fatal(err)
+	}
+	if err := closeOut(); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o644 {
+		t.Fatalf("mode = %o, want 644", info.Mode().Perm())
+	}
+}
+
+func TestOutputWriterResumeRejectsChangedSize(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "out")
+	if err := os.WriteFile(path, []byte("abc"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	o := config.NewOptions()
+	o.Outputs = []string{path}
+	o.ContinueAtSet = true
+	o.ResumeOffset = 3
+	o.AppendOutput = true
+	if err := os.WriteFile(path, []byte("abcd"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, closeOut, err := OutputWriter(o, &url.URL{Scheme: "https", Host: "example.test"}, 0, io.Discard)
+	if err == nil {
+		_ = closeOut()
+		t.Fatal("expected resume size mismatch")
+	}
+	if code := exitcode.From(err); code != exitcode.RangeError {
+		t.Fatalf("exit code = %d, err = %v", code, err)
+	}
+}
+
+func TestOutputWriterRefusesParentSymlink(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("parent symlink rejection is enforced with openat2 on Linux")
+	}
+	dir := t.TempDir()
+	real := filepath.Join(dir, "real")
+	if err := os.Mkdir(real, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	o := config.NewOptions()
+	o.Outputs = []string{filepath.Join(link, "out")}
+	if _, closeOut, err := OutputWriter(o, &url.URL{Scheme: "https", Host: "example.test"}, 0, io.Discard); err == nil {
+		_ = closeOut()
+		t.Fatal("expected parent symlink rejection")
+	}
+	if _, err := os.Stat(filepath.Join(real, "out")); !os.IsNotExist(err) {
+		t.Fatalf("symlinked parent was written through: %v", err)
+	}
+}
+
+func TestResolveResumeOffsetUsesOpenedFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "out")
+	if err := os.WriteFile(path, []byte("abcd"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	o := config.NewOptions()
+	o.Outputs = []string{path}
+	o.ContinueAtSet = true
+	o.ResumeOffset = -1
+	offset, err := ResolveResumeOffset(o, &url.URL{Scheme: "https", Host: "example.test"}, 0)
+	if err != nil || offset != 4 {
+		t.Fatalf("offset=%d err=%v", offset, err)
+	}
+	if o.ResumeOffset != 4 {
+		t.Fatalf("options resume offset = %d", o.ResumeOffset)
 	}
 }
 

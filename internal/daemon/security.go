@@ -16,15 +16,18 @@ func ensurePrivateDir(dir string) error {
 		return err
 	}
 	dir = abs
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
-	}
 	info, err := os.Lstat(dir)
+	if os.IsNotExist(err) {
+		if mkErr := os.MkdirAll(dir, 0o700); mkErr != nil {
+			return mkErr
+		}
+		info, err = os.Lstat(dir)
+	}
 	if err != nil {
 		return err
 	}
-	if !info.IsDir() {
-		return fmt.Errorf("daemon path %s is not a directory", dir)
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return fmt.Errorf("daemon path %s is not a private directory", dir)
 	}
 	if info.Mode().Perm()&0o077 != 0 {
 		return fmt.Errorf("daemon directory %s must not be group/world accessible", dir)
