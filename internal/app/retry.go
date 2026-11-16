@@ -129,7 +129,10 @@ func retryFits(o *config.Options, start time.Time, delay time.Duration) bool {
 }
 
 func waitRetry(ctx context.Context, delay time.Duration) error {
-	if delay <= 0 {
+	if delay < 0 {
+		return fmt.Errorf("negative retry delay")
+	}
+	if delay == 0 {
 		return nil
 	}
 	timer := time.NewTimer(delay)
@@ -147,13 +150,20 @@ func parseRetryAfter(value string) (time.Duration, bool) {
 	if value == "" {
 		return 0, false
 	}
-	if seconds, err := strconv.Atoi(value); err == nil && seconds >= 0 {
+	if seconds, err := strconv.ParseInt(value, 10, 64); err == nil && seconds >= 0 {
+		maxSeconds := int64(time.Minute / time.Second)
+		if seconds > maxSeconds {
+			seconds = maxSeconds
+		}
 		return time.Duration(seconds) * time.Second, true
 	}
 	if when, err := http.ParseTime(value); err == nil {
 		delay := time.Until(when)
 		if delay < 0 {
 			delay = 0
+		}
+		if delay > time.Minute {
+			delay = time.Minute
 		}
 		return delay, true
 	}

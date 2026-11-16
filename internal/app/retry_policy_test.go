@@ -6,7 +6,34 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"time"
 )
+
+func TestParseRetryAfterClamps(t *testing.T) {
+	cases := []struct {
+		value string
+		want  time.Duration
+		ok    bool
+	}{
+		{"1", time.Second, true},
+		{"9223372037", time.Minute, true},
+		{"-1", 0, false},
+		{"", 0, false},
+		{time.Now().Add(2 * time.Minute).UTC().Format(http.TimeFormat), time.Minute, true},
+	}
+	for _, tc := range cases {
+		got, ok := parseRetryAfter(tc.value)
+		if ok != tc.ok || (ok && got != tc.want) {
+			t.Errorf("parseRetryAfter(%q) = %v, %v; want %v, %v", tc.value, got, ok, tc.want, tc.ok)
+		}
+	}
+}
+
+func TestWaitRetryRejectsNegativeDelay(t *testing.T) {
+	if err := waitRetry(nil, -time.Second); err == nil {
+		t.Fatal("expected negative delay error")
+	}
+}
 
 func TestRetryIdempotentBlocksPost(t *testing.T) {
 	var attempts int32
