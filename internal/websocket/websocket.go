@@ -175,6 +175,7 @@ func Run(o *config.Options, u *url.URL, idx int, stdout, stderr io.Writer) error
 		return output.WriteOutFormat(o, info, stdout)
 	}
 	messages := 0
+	total := int64(0)
 	messageLimit := messageSizeLimit(o)
 	var terminalErr error
 	for {
@@ -198,7 +199,19 @@ func Run(o *config.Options, u *url.URL, idx int, stdout, stderr io.Writer) error
 			terminalErr = &exitcode.Coded{Code: exitcode.RecvFailure, Msg: "WebSocket connection closed unexpectedly"}
 			break
 		}
+		messageSize := int64(len(data))
+		if messageType == websocket.TextMessage {
+			messageSize++
+		}
+		if o.MaxFileSize > 0 && total+messageSize > o.MaxFileSize {
+			_ = conn.WriteControl(websocket.CloseMessage,
+				websocket.FormatCloseMessage(websocket.CloseMessageTooBig, ""),
+				time.Now().Add(time.Second))
+			terminalErr = &output.MaxFilesizeError{}
+			break
+		}
 		written, writeErr := writeWSMessage(out, data, messageType == websocket.TextMessage)
+		total += int64(written)
 		info.SizeDownload += int64(written)
 		if writeErr != nil {
 			terminalErr = writeErr

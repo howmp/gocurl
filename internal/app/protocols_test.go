@@ -101,6 +101,34 @@ func TestWebSocketCompressedMessageTooLarge(t *testing.T) {
 	}
 }
 
+func TestWebSocketCumulativeMaxFilesize(t *testing.T) {
+	payload := bytes.Repeat([]byte("A"), 600<<10)
+	upgrader := websocket.Upgrader{EnableCompression: true}
+	srv := fhttptest.NewServer(fhttp.HandlerFunc(func(w fhttp.ResponseWriter, r *fhttp.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		for i := 0; i < 2; i++ {
+			if err := conn.WriteMessage(websocket.BinaryMessage, payload); err != nil {
+				return
+			}
+		}
+		_, _, _ = conn.ReadMessage()
+	}))
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/stream"
+	code, out, stderr := runGocurl(t, "-sS", "--compressed", "--max-filesize", "1M", "--max-time", "5", "-d", "seed", wsURL)
+	if code != 63 {
+		t.Fatalf("exit=%d stderr=%q", code, stderr)
+	}
+	if len(out) > 1<<20 {
+		t.Fatalf("output length = %d, want <= 1 MiB", len(out))
+	}
+}
+
 func TestWebSocketResolve(t *testing.T) {
 	upgrader := websocket.Upgrader{}
 	srv := fhttptest.NewServer(fhttp.HandlerFunc(func(w fhttp.ResponseWriter, r *fhttp.Request) {
