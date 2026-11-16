@@ -31,10 +31,14 @@ func TestValidateUserHeaders(t *testing.T) {
 }
 
 func TestValidateRequestTarget(t *testing.T) {
-	if err := ValidateRequestTarget("/ok"); err != nil {
-		t.Fatal(err)
+	for _, target := range []string{"/ok", "/a?b=c", "*", "http://example.test/path", "/%C3%BC"} {
+		if err := ValidateRequestTarget(target); err != nil {
+			t.Errorf("ValidateRequestTarget(%q) = %v", target, err)
+		}
 	}
-	if err := ValidateRequestTarget("/bad path"); err == nil {
-		t.Fatal("expected whitespace rejection")
+	for _, target := range []string{"/bad path", "/bad\tpath", "/bad\rpath", "/bad\npath", "/bad\x00path", "/bad\x0bpath", "/bad\x7fpath", "/ü"} {
+		if err := ValidateRequestTarget(target); err == nil {
+			t.Errorf("ValidateRequestTarget(%q) accepted", target)
+		}
 	}
 }

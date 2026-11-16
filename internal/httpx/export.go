@@ -35,8 +35,10 @@ func ValidateUserHeaders(o *config.Options) error {
 }
 
 func ValidateRequestTarget(target string) error {
-	if strings.ContainsAny(target, " \t\r\n") {
-		return fmt.Errorf("invalid request target %q", target)
+	for i := 0; i < len(target); i++ {
+		if target[i] <= 0x20 || target[i] >= 0x7f {
+			return fmt.Errorf("invalid request target %q", target)
+		}
 	}
 	return nil
 }

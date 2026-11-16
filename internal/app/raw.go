@@ -258,8 +258,8 @@ func validateRawRequest(req *fhttp.Request, target string) error {
 	if req == nil || !httpguts.ValidHeaderFieldName(req.Method) {
 		return fmt.Errorf("raw mode: invalid request method %q", req.Method)
 	}
-	if strings.ContainsAny(target, " \t\r\n") {
-		return fmt.Errorf("raw mode: invalid request target %q", target)
+	if err := httpx.ValidateRequestTarget(target); err != nil {
+		return fmt.Errorf("raw mode: %w", err)
 	}
 	if req.Host != "" && !httpguts.ValidHeaderFieldValue(req.Host) {
 		return fmt.Errorf("raw mode: invalid Host header")
