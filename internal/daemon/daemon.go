@@ -492,6 +492,9 @@ func (s *daemonState) writeDaemonError(bw *bufio.Writer, err error, code int) {
 }
 
 func writeDaemonReply(bw *bufio.Writer, resp daemonResponse) error {
+	if err := validateDaemonResponse(&resp); err != nil {
+		return err
+	}
 	if err := writeDaemonFrame(bw, resp); err != nil {
 		return err
 	}

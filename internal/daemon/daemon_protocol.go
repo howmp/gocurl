@@ -8,14 +8,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
+
+	"golang.org/x/net/http/httpguts"
 )
 
 const (
 	daemonProtocolVersion = 5
 	maxDaemonMetadata     = 1 << 20
+	maxDaemonRedirects    = 10000
+	maxDaemonHeaders      = 4096
+	maxDumpCookiesBytes   = 16 << 20
 	defaultDaemonIdle     = 15 * time.Minute
 )
 
@@ -96,6 +102,44 @@ type daemonResponse struct {
 	RemoteAddr   string              `json:"remote_addr,omitempty"`
 	Error        string              `json:"error,omitempty"`
 	ErrorCode    int                 `json:"error_code,omitempty"`
+}
+
+func validateDaemonResponse(resp *daemonResponse) error {
+	if resp == nil {
+		return fmt.Errorf("daemon response is missing")
+	}
+	if resp.BodyLength < -1 {
+		return fmt.Errorf("invalid daemon body length %d", resp.BodyLength)
+	}
+	if resp.BodyLength < 0 && !resp.BodyChunked {
+		return fmt.Errorf("daemon body length %d requires chunked encoding", resp.BodyLength)
+	}
+	if resp.BodyChunked && resp.BodyLength != -1 {
+		return fmt.Errorf("daemon chunked response has body length %d", resp.BodyLength)
+	}
+	if len(resp.Redirects) > maxDaemonRedirects {
+		return fmt.Errorf("daemon response has too many redirects: %d", len(resp.Redirects))
+	}
+	for _, raw := range resp.Redirects {
+		u, err := url.Parse(raw)
+		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+			return fmt.Errorf("invalid daemon redirect URL")
+		}
+	}
+	if len(resp.Headers) > maxDaemonHeaders {
+		return fmt.Errorf("daemon response has too many headers: %d", len(resp.Headers))
+	}
+	for name, values := range resp.Headers {
+		if !httpguts.ValidHeaderFieldName(name) {
+			return fmt.Errorf("invalid daemon response header name")
+		}
+		for _, value := range values {
+			if !httpguts.ValidHeaderFieldValue(value) {
+				return fmt.Errorf("invalid daemon response header value")
+			}
+		}
+	}
+	return nil
 }
 
 func writeDaemonFrame(w *bufio.Writer, v any) error {

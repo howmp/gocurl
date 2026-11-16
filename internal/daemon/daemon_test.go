@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -84,6 +85,90 @@ func TestRedirectResponseChain(t *testing.T) {
 	}
 	if got := chain.Request.URL.String(); got != "https://three.test/" {
 		t.Fatalf("last redirect URL = %q", got)
+	}
+}
+
+func TestValidateDaemonResponse(t *testing.T) {
+	valid := []daemonResponse{
+		{BodyLength: 0},
+		{BodyLength: 10},
+		{BodyLength: -1, BodyChunked: true},
+		{BodyLength: 5, Headers: map[string][]string{"content-type": {"text/plain"}}, Redirects: []string{"https://example.test/"}},
+	}
+	for _, resp := range valid {
+		if err := validateDaemonResponse(&resp); err != nil {
+			t.Fatalf("valid response rejected: %+v: %v", resp, err)
+		}
+	}
+	invalid := []daemonResponse{
+		{BodyLength: -2},
+		{BodyLength: -1},
+		{BodyLength: 0, BodyChunked: true},
+		{BodyLength: 1, Headers: map[string][]string{"bad header": {"x"}}},
+		{BodyLength: 1, Headers: map[string][]string{"x": {"bad\r\nvalue"}}},
+		{BodyLength: 1, Redirects: []string{"file:///etc/passwd"}},
+		{BodyLength: 1, Redirects: make([]string, maxDaemonRedirects+1)},
+	}
+	for _, resp := range invalid {
+		if err := validateDaemonResponse(&resp); err == nil {
+			t.Fatalf("invalid response accepted: %+v", resp)
+		}
+	}
+}
+
+func TestDaemonBodyRejectsNegativeRemaining(t *testing.T) {
+	body := &daemonBody{reader: strings.NewReader(""), remaining: -1}
+	if _, err := body.Read(make([]byte, 1)); err == nil {
+		t.Fatal("expected invalid body length error")
+	}
+}
+
+func dumpCookiesServer(t *testing.T, resp daemonResponse, body string) string {
+	t.Helper()
+	socket := filepath.Join(t.TempDir(), "daemon.sock")
+	ln, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		var req daemonRequest
+		if err := readDaemonFrame(bufio.NewReader(conn), &req); err != nil {
+			return
+		}
+		bw := bufio.NewWriter(conn)
+		if err := writeDaemonFrame(bw, resp); err != nil {
+			return
+		}
+		_, _ = bw.WriteString(body)
+		_ = bw.Flush()
+	}()
+	return socket
+}
+
+func TestDumpCookiesBoundsResponse(t *testing.T) {
+	socket := dumpCookiesServer(t, daemonResponse{
+		Version:    daemonProtocolVersion,
+		BodyLength: maxDumpCookiesBytes + 1,
+	}, "")
+	if _, err := DumpCookies(socket, nil); err == nil {
+		t.Fatal("expected oversized cookie dump error")
+	}
+}
+
+func TestDumpCookiesReadsDeclaredLength(t *testing.T) {
+	socket := dumpCookiesServer(t, daemonResponse{
+		Version:    daemonProtocolVersion,
+		BodyLength: 5,
+	}, "helloEXTRA")
+	got, err := DumpCookies(socket, nil)
+	if err != nil || got != "hello" {
+		t.Fatalf("got %q err=%v", got, err)
 	}
 }
 

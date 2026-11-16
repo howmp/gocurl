@@ -206,6 +206,10 @@ func Do(o *config.Options, req *http.Request, body []byte) (*http.Response, stri
 		conn.Close()
 		return nil, "", func() {}, fmt.Errorf("daemon protocol version mismatch")
 	}
+	if err := validateDaemonResponse(&dresp); err != nil {
+		conn.Close()
+		return nil, "", func() {}, err
+	}
 	if dresp.Error != "" {
 		conn.Close()
 		if dresp.ErrorCode == 4 {
@@ -277,6 +281,9 @@ type daemonBody struct {
 func (b *daemonBody) Read(p []byte) (int, error) {
 	if b.chunked {
 		return b.readChunked(p)
+	}
+	if b.remaining < 0 {
+		return 0, fmt.Errorf("invalid daemon body length")
 	}
 	if b.remaining == 0 {
 		return 0, io.EOF
@@ -393,12 +400,24 @@ func DumpCookies(socket string, hosts []string) (string, error) {
 	if err := readDaemonFrame(br, &resp); err != nil {
 		return "", err
 	}
+	if resp.Version != daemonProtocolVersion {
+		return "", fmt.Errorf("daemon protocol version mismatch")
+	}
+	if err := validateDaemonResponse(&resp); err != nil {
+		return "", err
+	}
 	if resp.Error != "" {
 		return "", &exitcode.Coded{Code: resp.ErrorCode, Msg: resp.Error}
 	}
-	data, err := io.ReadAll(br)
+	if resp.BodyLength > maxDumpCookiesBytes {
+		return "", fmt.Errorf("daemon cookie dump exceeds %d bytes", maxDumpCookiesBytes)
+	}
+	data, err := io.ReadAll(io.LimitReader(br, resp.BodyLength))
 	if err != nil {
 		return "", err
+	}
+	if int64(len(data)) != resp.BodyLength {
+		return "", io.ErrUnexpectedEOF
 	}
 	return string(data), nil
 }
