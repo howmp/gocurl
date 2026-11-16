@@ -37,7 +37,7 @@ func DialHTTPContext(o *config.Options, ctx context.Context, network, addr strin
 	if err != nil {
 		return nil, err
 	}
-	dialer := &net.Dialer{Timeout: o.ConnectTimeout}
+	dialer := &net.Dialer{Timeout: o.ConnectTimeout, Control: denyPrivateControl(o)}
 	local, err := LocalTCPAddr(o.InterfaceName)
 	if err != nil {
 		return nil, err
@@ -155,6 +155,6 @@ func DialTCP(ctx context.Context, network, addr string, o *config.Options) (net.
 	if len(o.Resolves) > 0 || len(o.ConnectTo) > 0 || o.InterfaceName != "" || HasCustomDNS(o) {
 		return DialHTTPContext(o, ctx, network, addr)
 	}
-	d := &net.Dialer{Timeout: o.ConnectTimeout}
+	d := &net.Dialer{Timeout: o.ConnectTimeout, Control: denyPrivateControl(o)}
 	return d.DialContext(ctx, network, addr)
 }

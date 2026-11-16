@@ -151,6 +151,7 @@ CLI/集成测试目前集中在 `internal/app`，后续可在各包内补充单�
     --dns-servers <servers>    自定义 DNS，逗号分隔，可指定端口
     --doh-url <url>            DNS-over-HTTPS resolver
     --doh-insecure             跳过 DoH TLS 证书校验
+    --deny-private-addresses   拒绝环回/私网/链路本地目标（默认关闭）
 -4, --ipv4                    只使用 IPv4
 -6, --ipv6                    只使用 IPv6
 -k, --insecure                跳过目标证书校验

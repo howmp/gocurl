@@ -941,6 +941,7 @@ reported as "Protocol ... not supported". Options use curl-compatible names.
       --dns-servers <servers>   Custom DNS resolvers, comma-separated
       --doh-url <url>           DNS-over-HTTPS resolver URL
       --doh-insecure            Skip DoH TLS certificate verification
+      --deny-private-addresses  Reject private/loopback destinations
   -A, --user-agent <string>     User-Agent header
   -e, --referer <url>           Referer header
   -b, --cookie <string|file>    Cookie string or Netscape cookie file

@@ -31,6 +31,27 @@ func TestParseResolveRequiresIP(t *testing.T) {
 	}
 }
 
+func TestValidateDohURL(t *testing.T) {
+	valid := []string{"https://dns.example/query", "https://127.0.0.1:8443/dns-query"}
+	for _, value := range valid {
+		if err := validateDohURL(value); err != nil {
+			t.Errorf("validateDohURL(%q) = %v", value, err)
+		}
+	}
+	invalid := []string{
+		"http://dns.example/query",
+		"https://user:pass@dns.example/query",
+		"https://dns.example/query#fragment",
+		"https:///query",
+		"",
+	}
+	for _, value := range invalid {
+		if err := validateDohURL(value); err == nil {
+			t.Errorf("validateDohURL(%q) accepted", value)
+		}
+	}
+}
+
 func TestValidateConnectTarget(t *testing.T) {
 	valid := []string{"example.test:443", "127.0.0.1:8080", "[::1]:443"}
 	for _, target := range valid {

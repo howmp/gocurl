@@ -31,6 +31,9 @@ func dnsTimeout(o *config.Options) time.Duration {
 }
 
 func dnsQueryTypes(o *config.Options) []dnsmessage.Type {
+	if o == nil {
+		return []dnsmessage.Type{dnsmessage.TypeA, dnsmessage.TypeAAAA}
+	}
 	if o.Ipv4 && o.Ipv6 {
 		return []dnsmessage.Type{dnsmessage.TypeA, dnsmessage.TypeAAAA}
 	}
@@ -234,6 +237,9 @@ func queryDoH(ctx context.Context, o *config.Options, msg []byte) ([]byte, error
 	if u.Scheme != "https" {
 		return nil, fmt.Errorf("option --doh-url: HTTPS is required, got %q", u.Scheme)
 	}
+	if u.Host == "" || u.User != nil || u.Fragment != "" {
+		return nil, fmt.Errorf("option --doh-url: invalid URL")
+	}
 	req, err := stdhttp.NewRequestWithContext(ctx, stdhttp.MethodPost, u.String(), bytes.NewReader(msg))
 	if err != nil {
 		return nil, err
@@ -258,6 +264,9 @@ func queryDoH(ctx context.Context, o *config.Options, msg []byte) ([]byte, error
 		default:
 			return nil, fmt.Errorf("DoH does not support %s proxies", proxyURL.Scheme)
 		}
+	} else if control := denyPrivateControl(o); control != nil {
+		dialer := &net.Dialer{Control: control}
+		transport.DialContext = dialer.DialContext
 	}
 	defer transport.CloseIdleConnections()
 	client := &stdhttp.Client{Transport: transport, Timeout: dnsTimeout(o)}
@@ -280,6 +289,9 @@ func queryDoH(ctx context.Context, o *config.Options, msg []byte) ([]byte, error
 }
 
 func ResolveHostIPs(ctx context.Context, o *config.Options, host string) ([]net.IP, error) {
+	if o == nil {
+		o = config.NewOptions()
+	}
 	if ip := net.ParseIP(strings.Trim(host, "[]")); ip != nil {
 		return []net.IP{ip}, nil
 	}
@@ -330,9 +342,15 @@ func ResolveHostIPs(ctx context.Context, o *config.Options, host string) ([]net.
 }
 
 func filterIPs(ips []net.IP, o *config.Options) []net.IP {
+	if o == nil {
+		o = config.NewOptions()
+	}
 	var out []net.IP
 	for _, ip := range ips {
 		if ip == nil {
+			continue
+		}
+		if o.DenyPrivateAddresses && privateAddressDenied(ip) {
 			continue
 		}
 		if o.Ipv4 && o.Ipv6 {

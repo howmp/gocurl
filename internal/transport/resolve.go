@@ -41,7 +41,7 @@ func resolveCandidates(ctx context.Context, o *config.Options, host, port string
 			return dialCandidates{}, err
 		}
 	}
-	target.addrs = ResolveAddresses(o, target.host, target.port)
+	target.addrs = filterDeniedResolveAddrs(ResolveAddresses(o, target.host, target.port), o)
 	if len(target.addrs) == 0 && HasCustomDNS(o) && net.ParseIP(target.host) == nil {
 		ips, err := ResolveHostIPs(ctx, o, target.host)
 		if err != nil {

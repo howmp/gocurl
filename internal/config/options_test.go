@@ -124,6 +124,7 @@ func TestLongValueOptionsParse(t *testing.T) {
 		"form": "a=b", "form-string": "a=b", "range": "0-1",
 		"resolve": "example.test:443:127.0.0.1", "connect-to": "a.test:443:b.test:443",
 		"continue-at": "1", "limit-rate": "1k", "max-filesize": "1k",
+		"doh-url": "https://dns.example/query",
 	}
 	for name := range longValueOptions {
 		v := values[name]

@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"math"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -85,30 +86,31 @@ type TransferOptions struct {
 
 // NetworkOptions groups ...
 type NetworkOptions struct {
-	Insecure      bool
-	Ipv4          bool
-	Ipv6          bool
-	Resolves      map[string][]string
-	DnsServers    []string
-	DohURL        string
-	DohInsecure   bool
-	CaPath        string
-	Proxy         string
-	ProxyUser     string
-	NoProxy       string
-	ProxyHeaders  []HeaderArg
-	ProxyInsecure bool
-	PreProxy      string
-	ConnectTo     map[string]string
-	UnixSocket    string
-	AbstractUnix  bool
-	InterfaceName string
-	CertFile      string
-	KeyFile       string
-	CertType      string
-	KeyType       string
-	KeyPass       string
-	CaCert        string
+	Insecure             bool
+	Ipv4                 bool
+	Ipv6                 bool
+	Resolves             map[string][]string
+	DnsServers           []string
+	DohURL               string
+	DohInsecure          bool
+	DenyPrivateAddresses bool
+	CaPath               string
+	Proxy                string
+	ProxyUser            string
+	NoProxy              string
+	ProxyHeaders         []HeaderArg
+	ProxyInsecure        bool
+	PreProxy             string
+	ConnectTo            map[string]string
+	UnixSocket           string
+	AbstractUnix         bool
+	InterfaceName        string
+	CertFile             string
+	KeyFile              string
+	CertType             string
+	KeyType              string
+	KeyPass              string
+	CaCert               string
 }
 
 // OutputOptions groups ...
@@ -213,73 +215,74 @@ type boolOption struct {
 }
 
 var longBoolOptions = map[string]boolOption{
-	"help":                  {func(o *Options) { o.Help = true }},
-	"version":               {func(o *Options) { o.Version = true }},
-	"get":                   {func(o *Options) { o.Get = true }},
-	"remote-name":           {func(o *Options) { o.RemoteName = true }},
-	"create-dirs":           {func(o *Options) { o.CreateDirs = true }},
-	"include":               {func(o *Options) { o.Include = true }},
-	"head":                  {func(o *Options) { o.Head = true }},
-	"location":              {func(o *Options) { o.Location = true }},
-	"location-trusted":      {func(o *Options) { o.Location = true; o.LocationTrusted = true }},
-	"post301":               {func(o *Options) { o.Post301 = true }},
-	"post302":               {func(o *Options) { o.Post302 = true }},
-	"post303":               {func(o *Options) { o.Post303 = true }},
-	"insecure":              {func(o *Options) { o.Insecure = true }},
-	"silent":                {func(o *Options) { o.Silent = true }},
-	"show-error":            {func(o *Options) { o.ShowError = true }},
-	"verbose":               {func(o *Options) { o.Verbose = true }},
-	"fail":                  {func(o *Options) { o.Fail = true }},
-	"fail-with-body":        {func(o *Options) { o.FailWithBody = true }},
-	"no-fail-with-body":     {func(o *Options) { o.FailWithBody = false }},
-	"compressed":            {func(o *Options) { o.Compressed = true }},
-	"raw":                   {func(o *Options) { o.Raw = true }},
-	"tr-encoding":           {func(o *Options) { o.TrEncoding = true }},
-	"raw-http":              {func(o *Options) { o.RawHTTP = true }},
-	"proxy-insecure":        {func(o *Options) { o.ProxyInsecure = true }},
-	"parallel":              {func(o *Options) { o.Parallel = true }},
-	"persist":               {func(o *Options) { o.Persist = true }},
-	"no-persist":            {func(o *Options) { o.Persist = false }},
-	"retry-all-errors":      {func(o *Options) { o.RetryAllErrors = true }},
-	"retry-connrefused":     {func(o *Options) { o.RetryConnrefused = true }},
-	"retry-idempotent":      {func(o *Options) { o.RetryIdempotent = true }},
-	"json-output":           {func(o *Options) { o.JsonOutput = true }},
-	"json-envelope":         {func(o *Options) { o.JsonEnvelope = true }},
-	"show-secrets":          {func(o *Options) { o.ShowSecrets = true }},
-	"ipv4":                  {func(o *Options) { o.Ipv4 = true }},
-	"ipv6":                  {func(o *Options) { o.Ipv6 = true }},
-	"ftp-pasv":              {func(o *Options) { o.FtpPasv = true }},
-	"ftp-ssl":               {func(o *Options) { o.FtpSSL = true }},
-	"ssl":                   {func(o *Options) { o.FtpSSL = true }},
-	"ssl-reqd":              {func(o *Options) { o.FtpSSL = true }},
-	"doh-insecure":          {func(o *Options) { o.DohInsecure = true }},
-	"list-only":             {func(o *Options) { o.ListOnly = true }},
-	"no-buffer":             {func(o *Options) { o.NoBuffer = true }},
-	"netrc":                 {func(o *Options) { o.Netrc = true }},
-	"no-location":           {func(o *Options) { o.Location = false }},
-	"no-include":            {func(o *Options) { o.Include = false }},
-	"no-head":               {func(o *Options) { o.Head = false }},
-	"no-insecure":           {func(o *Options) { o.Insecure = false }},
-	"no-silent":             {func(o *Options) { o.Silent = false }},
-	"no-show-error":         {func(o *Options) { o.ShowError = false }},
-	"no-verbose":            {func(o *Options) { o.Verbose = false }},
-	"no-fail":               {func(o *Options) { o.Fail = false }},
-	"no-compressed":         {func(o *Options) { o.Compressed = false }},
-	"no-get":                {func(o *Options) { o.Get = false }},
-	"no-remote-name":        {func(o *Options) { o.RemoteName = false }},
-	"globoff":               {func(*Options) {}},
-	"path-as-is":            {func(*Options) {}},
-	"no-progress-meter":     {func(*Options) {}},
-	"tcp-nodelay":           {func(*Options) {}},
-	"http1.0":               {func(o *Options) { o.HttpVersion = "1.0"; o.RawHTTP = true }},
-	"http1.1":               {func(o *Options) { o.HttpVersion = "1.1"; o.RawHTTP = false }},
-	"http2":                 {func(o *Options) { o.HttpVersion = "2"; o.RawHTTP = false }},
-	"http2-prior-knowledge": {func(o *Options) { o.HttpVersion = "2-prior"; o.RawHTTP = false }},
-	"basic":                 {func(o *Options) { o.AuthMode = "basic" }},
-	"digest":                {func(o *Options) { o.AuthMode = "digest" }},
-	"ntlm":                  {func(o *Options) { o.AuthMode = "ntlm" }},
-	"negotiate":             {func(o *Options) { o.AuthMode = "negotiate" }},
-	"anyauth":               {func(o *Options) { o.AuthMode = "anyauth" }},
+	"help":                   {func(o *Options) { o.Help = true }},
+	"version":                {func(o *Options) { o.Version = true }},
+	"get":                    {func(o *Options) { o.Get = true }},
+	"remote-name":            {func(o *Options) { o.RemoteName = true }},
+	"create-dirs":            {func(o *Options) { o.CreateDirs = true }},
+	"include":                {func(o *Options) { o.Include = true }},
+	"head":                   {func(o *Options) { o.Head = true }},
+	"location":               {func(o *Options) { o.Location = true }},
+	"location-trusted":       {func(o *Options) { o.Location = true; o.LocationTrusted = true }},
+	"post301":                {func(o *Options) { o.Post301 = true }},
+	"post302":                {func(o *Options) { o.Post302 = true }},
+	"post303":                {func(o *Options) { o.Post303 = true }},
+	"insecure":               {func(o *Options) { o.Insecure = true }},
+	"silent":                 {func(o *Options) { o.Silent = true }},
+	"show-error":             {func(o *Options) { o.ShowError = true }},
+	"verbose":                {func(o *Options) { o.Verbose = true }},
+	"fail":                   {func(o *Options) { o.Fail = true }},
+	"fail-with-body":         {func(o *Options) { o.FailWithBody = true }},
+	"no-fail-with-body":      {func(o *Options) { o.FailWithBody = false }},
+	"compressed":             {func(o *Options) { o.Compressed = true }},
+	"deny-private-addresses": {func(o *Options) { o.DenyPrivateAddresses = true }},
+	"raw":                    {func(o *Options) { o.Raw = true }},
+	"tr-encoding":            {func(o *Options) { o.TrEncoding = true }},
+	"raw-http":               {func(o *Options) { o.RawHTTP = true }},
+	"proxy-insecure":         {func(o *Options) { o.ProxyInsecure = true }},
+	"parallel":               {func(o *Options) { o.Parallel = true }},
+	"persist":                {func(o *Options) { o.Persist = true }},
+	"no-persist":             {func(o *Options) { o.Persist = false }},
+	"retry-all-errors":       {func(o *Options) { o.RetryAllErrors = true }},
+	"retry-connrefused":      {func(o *Options) { o.RetryConnrefused = true }},
+	"retry-idempotent":       {func(o *Options) { o.RetryIdempotent = true }},
+	"json-output":            {func(o *Options) { o.JsonOutput = true }},
+	"json-envelope":          {func(o *Options) { o.JsonEnvelope = true }},
+	"show-secrets":           {func(o *Options) { o.ShowSecrets = true }},
+	"ipv4":                   {func(o *Options) { o.Ipv4 = true }},
+	"ipv6":                   {func(o *Options) { o.Ipv6 = true }},
+	"ftp-pasv":               {func(o *Options) { o.FtpPasv = true }},
+	"ftp-ssl":                {func(o *Options) { o.FtpSSL = true }},
+	"ssl":                    {func(o *Options) { o.FtpSSL = true }},
+	"ssl-reqd":               {func(o *Options) { o.FtpSSL = true }},
+	"doh-insecure":           {func(o *Options) { o.DohInsecure = true }},
+	"list-only":              {func(o *Options) { o.ListOnly = true }},
+	"no-buffer":              {func(o *Options) { o.NoBuffer = true }},
+	"netrc":                  {func(o *Options) { o.Netrc = true }},
+	"no-location":            {func(o *Options) { o.Location = false }},
+	"no-include":             {func(o *Options) { o.Include = false }},
+	"no-head":                {func(o *Options) { o.Head = false }},
+	"no-insecure":            {func(o *Options) { o.Insecure = false }},
+	"no-silent":              {func(o *Options) { o.Silent = false }},
+	"no-show-error":          {func(o *Options) { o.ShowError = false }},
+	"no-verbose":             {func(o *Options) { o.Verbose = false }},
+	"no-fail":                {func(o *Options) { o.Fail = false }},
+	"no-compressed":          {func(o *Options) { o.Compressed = false }},
+	"no-get":                 {func(o *Options) { o.Get = false }},
+	"no-remote-name":         {func(o *Options) { o.RemoteName = false }},
+	"globoff":                {func(*Options) {}},
+	"path-as-is":             {func(*Options) {}},
+	"no-progress-meter":      {func(*Options) {}},
+	"tcp-nodelay":            {func(*Options) {}},
+	"http1.0":                {func(o *Options) { o.HttpVersion = "1.0"; o.RawHTTP = true }},
+	"http1.1":                {func(o *Options) { o.HttpVersion = "1.1"; o.RawHTTP = false }},
+	"http2":                  {func(o *Options) { o.HttpVersion = "2"; o.RawHTTP = false }},
+	"http2-prior-knowledge":  {func(o *Options) { o.HttpVersion = "2-prior"; o.RawHTTP = false }},
+	"basic":                  {func(o *Options) { o.AuthMode = "basic" }},
+	"digest":                 {func(o *Options) { o.AuthMode = "digest" }},
+	"ntlm":                   {func(o *Options) { o.AuthMode = "ntlm" }},
+	"negotiate":              {func(o *Options) { o.AuthMode = "negotiate" }},
+	"anyauth":                {func(o *Options) { o.AuthMode = "anyauth" }},
 }
 
 var longValueOptions = map[string]func(*Options, string) error{
@@ -311,8 +314,14 @@ var longValueOptions = map[string]func(*Options, string) error{
 	"write-out":            func(o *Options, v string) error { o.WriteOut = v; return nil },
 	"dump-header":          func(o *Options, v string) error { o.DumpHeader = v; return nil },
 	"ftp-port":             func(o *Options, v string) error { o.FtpPort = v; return nil },
-	"doh-url":              func(o *Options, v string) error { o.DohURL = v; return nil },
-	"upload-file":          func(o *Options, v string) error { o.UploadFile = v; return nil },
+	"doh-url": func(o *Options, v string) error {
+		if err := validateDohURL(v); err != nil {
+			return err
+		}
+		o.DohURL = v
+		return nil
+	},
+	"upload-file": func(o *Options, v string) error { o.UploadFile = v; return nil },
 	"header": func(o *Options, v string) error {
 		headers, err := parseHeaderOption(v)
 		if err != nil {
@@ -633,6 +642,14 @@ func shortOptionValue(args []string, i *int, raw string, pos int, ch byte) (stri
 	}
 	*i++
 	return args[*i], nil
+}
+
+func validateDohURL(value string) error {
+	u, err := url.Parse(value)
+	if err != nil || !strings.EqualFold(u.Scheme, "https") || u.Host == "" || u.User != nil || u.Fragment != "" {
+		return &optionError{"option --doh-url: invalid URL"}
+	}
+	return nil
 }
 
 func parseHeaderOption(v string) ([]HeaderArg, error) {
