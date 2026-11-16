@@ -427,6 +427,7 @@ GOCURL_DAEMON_LOG=file    覆盖日志路径
   组内仍可使用 `--parallel`。
 - 原始模式（`--raw-http`/`--http1.0`）不支持重定向、Digest/NTLM、重试和断点续传；
   `--raw-http` 会校验 method/request-target/header，任意字节请使用 `--raw-request`。
+  `--raw-request` 不做请求语法校验，仅应在受控环境中使用。
 - 常见 multipart 文件上传已流式处理；stdin、部分 encoder 场景会回退到内存，
   且仍不支持完整的 `multipart/mixed`。
 - `--json-envelope` 只支持 HTTP/HTTPS；内联 body 默认截断到 1 MiB；默认对
