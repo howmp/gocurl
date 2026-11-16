@@ -2,8 +2,10 @@ package websocket
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/url"
 	"time"
@@ -20,6 +22,8 @@ import (
 	utls "github.com/bogdanfinn/utls"
 	"github.com/bogdanfinn/websocket"
 )
+
+const defaultMaxMessageSize int64 = 64 << 20
 
 func Run(o *config.Options, u *url.URL, idx int, stdout, stderr io.Writer) error {
 
@@ -171,12 +175,21 @@ func Run(o *config.Options, u *url.URL, idx int, stdout, stderr io.Writer) error
 		return output.WriteOutFormat(o, info, stdout)
 	}
 	messages := 0
+	messageLimit := messageSizeLimit(o)
 	var terminalErr error
 	for {
-		messageType, data, readErr := conn.ReadMessage()
+		messageType, data, readErr := readWSMessage(conn, messageLimit)
 		if readErr != nil {
 			if ne, ok := readErr.(net.Error); ok && ne.Timeout() {
 				terminalErr = &exitcode.Coded{Code: exitcode.Timeout, Msg: fmt.Sprintf("operation timed out after %d messages", messages)}
+				break
+			}
+			var tooLarge *messageTooLargeError
+			if errors.As(readErr, &tooLarge) {
+				_ = conn.WriteControl(websocket.CloseMessage,
+					websocket.FormatCloseMessage(websocket.CloseMessageTooBig, ""),
+					time.Now().Add(time.Second))
+				terminalErr = readErr
 				break
 			}
 			if websocket.IsCloseError(readErr, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
@@ -207,6 +220,42 @@ func Run(o *config.Options, u *url.URL, idx int, stdout, stderr io.Writer) error
 		return terminalErr
 	}
 	return nil
+}
+
+type messageTooLargeError struct {
+	limit int64
+}
+
+func (e *messageTooLargeError) Error() string {
+	return fmt.Sprintf("WebSocket message exceeds maximum size of %d bytes", e.limit)
+}
+
+func (e *messageTooLargeError) ExitCode() int { return 63 }
+
+func messageSizeLimit(o *config.Options) int64 {
+	if o.MaxFileSize > 0 {
+		return o.MaxFileSize
+	}
+	return defaultMaxMessageSize
+}
+
+func readWSMessage(conn *websocket.Conn, limit int64) (int, []byte, error) {
+	messageType, r, err := conn.NextReader()
+	if err != nil {
+		return 0, nil, err
+	}
+	readLimit := limit
+	if readLimit < math.MaxInt64 {
+		readLimit++
+	}
+	data, err := io.ReadAll(io.LimitReader(r, readLimit))
+	if err != nil {
+		return messageType, nil, err
+	}
+	if int64(len(data)) > limit {
+		return messageType, nil, &messageTooLargeError{limit: limit}
+	}
+	return messageType, data, nil
 }
 
 func writeWSMessage(out io.Writer, data []byte, text bool) (int, error) {

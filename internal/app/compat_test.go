@@ -187,6 +187,13 @@ func TestHTTPOnlyOptionsRejectedForFTP(t *testing.T) {
 	}
 }
 
+func TestMaxFilesizeRejectedForFTP(t *testing.T) {
+	code, _, stderr := runGocurl(t, "-sS", "--max-filesize", "1k", "ftp://example.test/")
+	if code != 1 || !strings.Contains(stderr, "not supported for FTP") {
+		t.Fatalf("code=%d stderr=%q", code, stderr)
+	}
+}
+
 func TestRange(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Range") != "bytes=2-5" {

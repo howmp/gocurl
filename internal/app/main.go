@@ -493,6 +493,9 @@ func runOne(o *config.Options, rawURL string, idx int, stdout, stderr io.Writer)
 		if err := validateHTTPOnlyOptions(o); err != nil {
 			return err
 		}
+		if o.MaxFileSize > 0 {
+			return fmt.Errorf("option --max-filesize is not supported for FTP/FTPS")
+		}
 		return ftp.Run(o, u, idx, stdout, stderr)
 	case "ws", "wss":
 		if o.ContinueAtSet {
@@ -784,7 +787,6 @@ func validateHTTPOnlyOptions(o *config.Options) error {
 		{o.FailWithBody, "--fail-with-body"},
 		{o.UnixSocket != "", "--unix-socket"},
 		{o.LimitRate > 0, "--limit-rate"},
-		{o.MaxFileSize > 0, "--max-filesize"},
 	}
 	for _, check := range checks {
 		if check.used {

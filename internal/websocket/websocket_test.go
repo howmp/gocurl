@@ -23,6 +23,17 @@ type failingWriter struct{}
 
 func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("broken pipe") }
 
+func TestMessageSizeLimit(t *testing.T) {
+	o := config.NewOptions()
+	if got := messageSizeLimit(o); got != defaultMaxMessageSize {
+		t.Fatalf("default limit = %d, want %d", got, defaultMaxMessageSize)
+	}
+	o.MaxFileSize = 4096
+	if got := messageSizeLimit(o); got != 4096 {
+		t.Fatalf("max-filesize limit = %d, want 4096", got)
+	}
+}
+
 func TestWriteWSMessageReportsWriteErrors(t *testing.T) {
 	if _, err := writeWSMessage(failingWriter{}, []byte("data"), true); err == nil {
 		t.Fatal("expected write error")

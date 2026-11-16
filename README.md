@@ -442,7 +442,8 @@ GOCURL_DAEMON_LOG=file    覆盖日志路径
   `--raw-request`。`--raw-http` 也会校验 method、request-target 和 header。
 - `COOKIE_JAR`/`-c` 只导出本次目标 host 相关的 cookie；`-b` 字符串只作用于当前请求，
   不写入共享 daemon jar。
-- FTP/WS 暂不支持 `--limit-rate`/`--max-filesize`，组合使用会明确报错而不是静默忽略；
+- FTP 暂不支持 `--limit-rate`/`--max-filesize`；WS 不支持 `--limit-rate`，但支持
+  `--max-filesize` 作为单条消息解压后大小上限（默认 64 MiB），超限返回 63。
   FTP 暂不支持 `--netrc`。
 - `--negotiate` 是 NTLM fallback，不是完整 Kerberos；`--ntlm` 依赖连接保持。
 - `--retry` 默认保持 curl 行为，会重试任意方法；非幂等智能体任务建议使用
