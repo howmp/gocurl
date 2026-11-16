@@ -1047,7 +1047,8 @@ func resumeOutputOptions(o *config.Options, offset int64, u *url.URL, idx int, r
 	if !ok || start != offset {
 		return nil, &exitcode.Coded{Code: exitcode.RangeError, Msg: "HTTP Content-Range does not match resume offset"}
 	}
-	if resp.ContentLength >= 0 && end-start+1 != resp.ContentLength {
+	contentEncoding := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Encoding")))
+	if resp.ContentLength >= 0 && (contentEncoding == "" || contentEncoding == "identity") && end-start+1 != resp.ContentLength {
 		return nil, &exitcode.Coded{Code: exitcode.RangeError, Msg: "HTTP Content-Range does not match Content-Length"}
 	}
 	return output.ResumeOutput(o, u, idx, offset, false)
