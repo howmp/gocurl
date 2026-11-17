@@ -2,6 +2,8 @@ package httpx
 
 import (
 	"crypto/x509"
+	"strings"
+
 	"gocurl/internal/config"
 
 	http "github.com/bogdanfinn/fhttp"
@@ -29,6 +31,9 @@ func (p *tlsStatePinner) Pin(conn *utls.UConn, host string) error {
 
 func ApplyTLSState(o *config.Options, resp *http.Response) {
 	if o == nil || o.TLSState == nil || resp == nil || resp.TLS != nil || resp.Request == nil || resp.Request.URL == nil {
+		return
+	}
+	if !strings.EqualFold(resp.Request.URL.Scheme, "https") {
 		return
 	}
 	state, ok := o.TLSState.Get(resp.Request.URL.Hostname())
