@@ -108,10 +108,9 @@ func Run(o *config.Options, u *url.URL, idx int, stdout, stderr io.Writer) (retE
 			return err
 		}
 	} else {
-		dialer := &net.Dialer{Timeout: connectTimeout, LocalAddr: localAddr}
-		baseDial = dialer.DialContext
+		baseDial = transport.DenyPrivateDialer(o, connectTimeout, localAddr).DialContext
 	}
-	dialOpts = append(dialOpts, ftp.DialWithDialFunc(wrapFTPDial(baseDial, tracker, tlsConfig, explicitTLS, implicitTLS)))
+	dialOpts = append(dialOpts, ftp.DialWithDialFunc(wrapFTPDial(ctx, baseDial, tracker, tlsConfig, explicitTLS, implicitTLS)))
 	if explicitTLS {
 		dialOpts = append(dialOpts, ftp.DialWithExplicitTLS(tlsConfig))
 	} else if implicitTLS {
@@ -144,10 +143,10 @@ func Run(o *config.Options, u *url.URL, idx int, stdout, stderr io.Writer) (retE
 	return runFTPSession(o, u, idx, stdout, stderr, session, start, addr, remotePath)
 }
 
-func wrapFTPDial(base func(context.Context, string, string) (net.Conn, error), tracker *ftpConnTracker, tlsConfig *tls.Config, explicitTLS, implicitTLS bool) func(string, string) (net.Conn, error) {
+func wrapFTPDial(ctx context.Context, base func(context.Context, string, string) (net.Conn, error), tracker *ftpConnTracker, tlsConfig *tls.Config, explicitTLS, implicitTLS bool) func(string, string) (net.Conn, error) {
 	controlDial := true
 	return func(network, address string) (net.Conn, error) {
-		conn, err := base(context.Background(), network, address)
+		conn, err := base(ctx, network, address)
 		if err != nil {
 			return nil, err
 		}

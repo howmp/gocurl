@@ -74,17 +74,12 @@ func dialActiveFTP(o *config.Options, u *url.URL, addr, dialAddr string, tlsConf
 
 func activeFTPListenAddr(o *config.Options, dialAddr string) (string, error) {
 	value := strings.TrimSpace(o.FtpPort)
-	if value == "" {
-		if ip := localIPForDial(dialAddr); ip != nil {
-			return net.JoinHostPort(ip.String(), "0"), nil
+	localIP := localIPForDial(dialAddr)
+	if value == "" || value == "-" {
+		if localIP == nil {
+			return "", fmt.Errorf("option --ftp-port: cannot determine a local address for %s; refusing to listen on all interfaces", dialAddr)
 		}
-		return ":0", nil
-	}
-	if value == "-" {
-		if ip := localIPForDial(dialAddr); ip != nil {
-			return net.JoinHostPort(ip.String(), "0"), nil
-		}
-		return ":0", nil
+		return net.JoinHostPort(localIP.String(), "0"), nil
 	}
 	value = strings.TrimPrefix(value, "if!")
 	if ip := net.ParseIP(strings.Trim(value, "[]")); ip != nil {
@@ -94,6 +89,9 @@ func activeFTPListenAddr(o *config.Options, dialAddr string) (string, error) {
 		return net.JoinHostPort(local.IP.String(), "0"), nil
 	}
 	if host, port, err := net.SplitHostPort(value); err == nil {
+		if host == "" {
+			return "", fmt.Errorf("option --ftp-port: refusing to listen on all interfaces")
+		}
 		return net.JoinHostPort(host, port), nil
 	}
 	if strings.HasPrefix(value, "[") && strings.HasSuffix(value, "]") {
