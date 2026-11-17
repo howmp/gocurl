@@ -237,9 +237,18 @@ func ftpResumeReader(path string, offset int64) (io.ReadCloser, error) {
 		}
 		return io.NopCloser(os.Stdin), nil
 	}
-	f, err := os.Open(path)
+	f, err := openUploadFile(path)
 	if err != nil {
 		return nil, err
+	}
+	info, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+	if offset < 0 || offset > info.Size() {
+		_ = f.Close()
+		return nil, fmt.Errorf("resume offset %d is outside upload file size %d", offset, info.Size())
 	}
 	if offset > 0 {
 		if _, err := f.Seek(offset, io.SeekStart); err != nil {
