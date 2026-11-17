@@ -357,3 +357,32 @@ func TestVerboseUsesExplicitHTTPVersion(t *testing.T) {
 		t.Fatalf("verbose = %q", buf.String())
 	}
 }
+
+func TestWriteFileRejectsSymlinkedParent(t *testing.T) {
+	base := t.TempDir()
+	real := filepath.Join(base, "real")
+	if err := os.MkdirAll(real, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+	if err := WriteFile(filepath.Join(link, "cookies.txt"), []byte("data")); err == nil {
+		t.Fatal("symlinked parent accepted")
+	}
+	if _, err := os.Stat(filepath.Join(real, "cookies.txt")); !os.IsNotExist(err) {
+		t.Fatalf("write escaped into the symlink target: %v", err)
+	}
+}
+
+func TestWriteFileWritesRegularPath(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cookies.txt")
+	if err := WriteFile(path, []byte("data")); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != "data" {
+		t.Fatalf("content = %q err = %v", data, err)
+	}
+}

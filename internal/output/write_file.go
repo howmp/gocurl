@@ -1,10 +1,20 @@
 package output
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
 )
+
+func tempNameFor(path string) (string, error) {
+	var suffix [8]byte
+	if _, err := rand.Read(suffix[:]); err != nil {
+		return "", err
+	}
+	return path + ".tmp-" + hex.EncodeToString(suffix[:]), nil
+}
 
 func WriteFile(path string, data []byte) error {
 	if info, err := os.Lstat(path); err == nil {
@@ -23,15 +33,17 @@ func WriteFile(path string, data []byte) error {
 			return f.Close()
 		}
 	}
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
+	name, err := tempNameFor(path)
 	if err != nil {
 		return err
 	}
-	tmpName := tmp.Name()
+	tmp, err := openOutputFile(name, false, true)
+	if err != nil {
+		return err
+	}
 	cleanup := func() {
 		_ = tmp.Close()
-		_ = os.Remove(tmpName)
+		_ = os.Remove(name)
 	}
 	if err := tmp.Chmod(0o600); err != nil {
 		cleanup()
@@ -46,14 +58,14 @@ func WriteFile(path string, data []byte) error {
 		return err
 	}
 	if err := tmp.Close(); err != nil {
-		_ = os.Remove(tmpName)
+		_ = os.Remove(name)
 		return err
 	}
-	if err := os.Rename(tmpName, path); err != nil {
-		_ = os.Remove(tmpName)
+	if err := os.Rename(name, path); err != nil {
+		_ = os.Remove(name)
 		return err
 	}
-	if d, err := os.Open(dir); err == nil {
+	if d, err := os.Open(filepath.Dir(path)); err == nil {
 		_ = d.Sync()
 		_ = d.Close()
 	}
