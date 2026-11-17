@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	daemonProtocolVersion = 5
+	daemonProtocolVersion = 6
 	maxDaemonMetadata     = 1 << 20
 	maxDaemonRedirects    = 10000
 	maxDaemonHeaders      = 4096
@@ -33,40 +33,41 @@ const (
 )
 
 type daemonTransport struct {
-	HTTPVersion      string              `json:"http_version"`
-	Insecure         bool                `json:"insecure"`
-	Proxy            string              `json:"proxy,omitempty"`
-	ProxyMode        string              `json:"proxy_mode,omitempty"`
-	ProxyUser        string              `json:"proxy_user,omitempty"`
-	NoProxy          string              `json:"no_proxy,omitempty"`
-	IPv4             bool                `json:"ipv4,omitempty"`
-	IPv6             bool                `json:"ipv6,omitempty"`
-	ConnectTimeoutMS int64               `json:"connect_timeout_ms,omitempty"`
-	Location         bool                `json:"location,omitempty"`
-	LocationTrusted  bool                `json:"location_trusted,omitempty"`
-	Post301          bool                `json:"post301,omitempty"`
-	Post302          bool                `json:"post302,omitempty"`
-	Post303          bool                `json:"post303,omitempty"`
-	MaxRedirs        int                 `json:"max_redirs,omitempty"`
-	MaxTimeMS        int64               `json:"max_time_ms,omitempty"`
-	CertFile         string              `json:"cert_file,omitempty"`
-	KeyFile          string              `json:"key_file,omitempty"`
-	CertType         string              `json:"cert_type,omitempty"`
-	KeyType          string              `json:"key_type,omitempty"`
-	KeyPass          string              `json:"key_pass,omitempty"`
-	CACert           string              `json:"ca_cert,omitempty"`
-	CAPath           string              `json:"ca_path,omitempty"`
-	Resolve          map[string][]string `json:"resolve,omitempty"`
-	ConnectTo        map[string]string   `json:"connect_to,omitempty"`
-	UnixSocket       string              `json:"unix_socket,omitempty"`
-	AbstractUnix     bool                `json:"abstract_unix,omitempty"`
-	Interface        string              `json:"interface,omitempty"`
-	ProxyHeaders     map[string][]string `json:"proxy_headers,omitempty"`
-	ProxyInsecure    bool                `json:"proxy_insecure,omitempty"`
-	PreProxy         string              `json:"pre_proxy,omitempty"`
-	DnsServers       []string            `json:"dns_servers,omitempty"`
-	DohURL           string              `json:"doh_url,omitempty"`
-	DohInsecure      bool                `json:"doh_insecure,omitempty"`
+	HTTPVersion          string              `json:"http_version"`
+	Insecure             bool                `json:"insecure"`
+	Proxy                string              `json:"proxy,omitempty"`
+	ProxyMode            string              `json:"proxy_mode,omitempty"`
+	ProxyUser            string              `json:"proxy_user,omitempty"`
+	NoProxy              string              `json:"no_proxy,omitempty"`
+	IPv4                 bool                `json:"ipv4,omitempty"`
+	IPv6                 bool                `json:"ipv6,omitempty"`
+	ConnectTimeoutMS     int64               `json:"connect_timeout_ms,omitempty"`
+	Location             bool                `json:"location,omitempty"`
+	LocationTrusted      bool                `json:"location_trusted,omitempty"`
+	Post301              bool                `json:"post301,omitempty"`
+	Post302              bool                `json:"post302,omitempty"`
+	Post303              bool                `json:"post303,omitempty"`
+	MaxRedirs            int                 `json:"max_redirs,omitempty"`
+	MaxTimeMS            int64               `json:"max_time_ms,omitempty"`
+	CertFile             string              `json:"cert_file,omitempty"`
+	KeyFile              string              `json:"key_file,omitempty"`
+	CertType             string              `json:"cert_type,omitempty"`
+	KeyType              string              `json:"key_type,omitempty"`
+	KeyPass              string              `json:"key_pass,omitempty"`
+	CACert               string              `json:"ca_cert,omitempty"`
+	CAPath               string              `json:"ca_path,omitempty"`
+	Resolve              map[string][]string `json:"resolve,omitempty"`
+	ConnectTo            map[string]string   `json:"connect_to,omitempty"`
+	UnixSocket           string              `json:"unix_socket,omitempty"`
+	AbstractUnix         bool                `json:"abstract_unix,omitempty"`
+	Interface            string              `json:"interface,omitempty"`
+	ProxyHeaders         map[string][]string `json:"proxy_headers,omitempty"`
+	ProxyInsecure        bool                `json:"proxy_insecure,omitempty"`
+	PreProxy             string              `json:"pre_proxy,omitempty"`
+	DnsServers           []string            `json:"dns_servers,omitempty"`
+	DohURL               string              `json:"doh_url,omitempty"`
+	DohInsecure          bool                `json:"doh_insecure,omitempty"`
+	DenyPrivateAddresses bool                `json:"deny_private_addresses,omitempty"`
 }
 
 type daemonRequest struct {
