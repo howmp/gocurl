@@ -1,5 +1,5 @@
 BINARY ?= gocurl
-GO := go
+override GO = go
 
 ifeq ($(strip $(BINARY)),)
 $(error BINARY must not be empty)
@@ -24,6 +24,15 @@ $(error BINARY must not contain glob characters)
 endif
 ifneq ($(filter -%,$(BINARY)),)
 $(error BINARY must not start with '-')
+endif
+ifneq ($(findstring $$,$(value BINARY)),)
+$(error BINARY must not contain '$')
+endif
+ifneq ($(findstring `,$(value BINARY)),)
+$(error BINARY must not contain backticks)
+endif
+ifneq ($(findstring ;,$(value BINARY)),)
+$(error BINARY must not contain shell metacharacters)
 endif
 
 .PHONY: all build test vet clean
