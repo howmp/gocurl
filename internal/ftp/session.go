@@ -158,7 +158,7 @@ func runFTPSession(o *config.Options, u *url.URL, idx int, stdout, stderr io.Wri
 		}
 		defer reader.Close()
 		if o.Verbose {
-			fmt.Fprintf(stderr, "> STOR %s\n", target)
+			fmt.Fprintf(stderr, "> STOR %s\n", sanitizeListField(target))
 		}
 		if err := session.store(target, offset, reader); err != nil {
 			return err
@@ -199,9 +199,9 @@ func runFTPSession(o *config.Options, u *url.URL, idx int, stdout, stderr io.Wri
 	if isDir {
 		if o.Verbose {
 			if o.ListOnly {
-				fmt.Fprintf(stderr, "> NLST %s\n", remotePath)
+				fmt.Fprintf(stderr, "> NLST %s\n", sanitizeListField(remotePath))
 			} else {
-				fmt.Fprintf(stderr, "> LIST %s\n", remotePath)
+				fmt.Fprintf(stderr, "> LIST %s\n", sanitizeListField(remotePath))
 			}
 		}
 		n, err := session.list(remotePath, o.ListOnly, out)
@@ -211,7 +211,7 @@ func runFTPSession(o *config.Options, u *url.URL, idx int, stdout, stderr io.Wri
 		info.SizeDownload = n
 	} else {
 		if o.Verbose {
-			fmt.Fprintf(stderr, "> RETR %s\n", remotePath)
+			fmt.Fprintf(stderr, "> RETR %s\n", sanitizeListField(remotePath))
 		}
 		n, err := session.retrieve(remotePath, offset, out)
 		if err != nil {
