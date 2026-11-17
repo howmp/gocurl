@@ -253,6 +253,7 @@ func queryDoH(ctx context.Context, o *config.Options, msg []byte) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
+	control := denyPrivateControl(o)
 	if proxyRaw != "" {
 		proxyURL, err := url.Parse(proxyRaw)
 		if err != nil {
@@ -264,9 +265,10 @@ func queryDoH(ctx context.Context, o *config.Options, msg []byte) ([]byte, error
 		default:
 			return nil, fmt.Errorf("DoH does not support %s proxies", proxyURL.Scheme)
 		}
-	} else if control := denyPrivateControl(o); control != nil {
-		dialer := &net.Dialer{Control: control}
-		transport.DialContext = dialer.DialContext
+	}
+	if control != nil {
+		// Applies to the DoH server as well as to any proxy hop.
+		transport.DialContext = (&net.Dialer{Control: control}).DialContext
 	}
 	defer transport.CloseIdleConnections()
 	client := &stdhttp.Client{Transport: transport, Timeout: dnsTimeout(o)}

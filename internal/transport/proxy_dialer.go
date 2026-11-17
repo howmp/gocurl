@@ -95,10 +95,9 @@ func (d *chainProxyDialer) baseDialer() xproxy.Dialer {
 
 func (d *chainProxyDialer) dialDirectOrPreProxy(ctx context.Context, network, addr string) (net.Conn, error) {
 	if d.o.PreProxy != "" {
-		return dialViaProxy(ctx, d.o.PreProxy, addr, d.timeout, d.localAddr, nil, d.o.ProxyInsecure)
+		return dialViaProxy(ctx, d.o, d.o.PreProxy, addr, d.timeout, d.localAddr, nil, d.o.ProxyInsecure)
 	}
-	dialer := &net.Dialer{Timeout: d.timeout, LocalAddr: d.localAddr}
-	return dialer.DialContext(ctx, network, addr)
+	return DenyPrivateDialer(d.o, d.timeout, d.localAddr).DialContext(ctx, network, addr)
 }
 
 func (d *chainProxyDialer) dialHTTPProxy(ctx context.Context, proxyURL *url.URL, target string) (net.Conn, error) {
@@ -193,7 +192,7 @@ type bufferedConn struct {
 
 func (c *bufferedConn) Read(p []byte) (int, error) { return c.reader.Read(p) }
 
-func dialViaProxy(ctx context.Context, proxyRaw, target string, timeout time.Duration, localAddr *net.TCPAddr, headers fhttp.Header, insecure bool) (net.Conn, error) {
+func dialViaProxy(ctx context.Context, o *config.Options, proxyRaw, target string, timeout time.Duration, localAddr *net.TCPAddr, headers fhttp.Header, insecure bool) (net.Conn, error) {
 	raw := strings.TrimSpace(proxyRaw)
 	if !strings.Contains(raw, "://") {
 		raw = "http://" + raw
@@ -203,19 +202,19 @@ func dialViaProxy(ctx context.Context, proxyRaw, target string, timeout time.Dur
 		return nil, err
 	}
 	normalizeProxyPort(proxyURL)
+	dialer := DenyPrivateDialer(o, timeout, localAddr)
 	switch strings.ToLower(proxyURL.Scheme) {
 	case "http", "https":
-		dialer := &net.Dialer{Timeout: timeout, LocalAddr: localAddr}
 		return connectHTTPProxy(ctx, proxyURL, target, timeout, headers, insecure, dialer.DialContext)
 	case "socks4", "socks4a", "socks5", "socks5h":
-		dialer, err := xproxy.FromURL(proxyURL, &net.Dialer{Timeout: timeout, LocalAddr: localAddr})
+		socksDialer, err := xproxy.FromURL(proxyURL, dialer)
 		if err != nil {
 			return nil, err
 		}
-		if cd, ok := dialer.(xproxy.ContextDialer); ok {
+		if cd, ok := socksDialer.(xproxy.ContextDialer); ok {
 			return cd.DialContext(ctx, "tcp", target)
 		}
-		return dialer.Dial("tcp", target)
+		return socksDialer.Dial("tcp", target)
 	default:
 		return nil, fmt.Errorf("proxy scheme %q is not supported", proxyURL.Scheme)
 	}
