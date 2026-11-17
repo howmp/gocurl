@@ -5,6 +5,7 @@ import (
 	"net"
 	"strings"
 	"syscall"
+	"time"
 
 	"gocurl/internal/config"
 )
@@ -30,6 +31,9 @@ func isDeniedIP(ip net.IP) bool {
 	v4 := ip.To4()
 	if v4 == nil {
 		return false
+	}
+	if v4[0] == 0 {
+		return true
 	}
 	if v4[0] == 100 && v4[1] >= 64 && v4[1] <= 127 {
 		return true
@@ -93,6 +97,13 @@ func denyPrivateControl(o *config.Options) func(string, string, syscall.RawConn)
 		}
 		return nil
 	}
+}
+
+// DenyPrivateDialer returns a dialer that enforces --deny-private-addresses,
+// or a plain dialer when the policy is off. Callers outside this package use
+// it to keep protocol-specific dial paths (FTP, proxy chains) consistent.
+func DenyPrivateDialer(o *config.Options, timeout time.Duration, local *net.TCPAddr) *net.Dialer {
+	return &net.Dialer{Timeout: timeout, LocalAddr: local, Control: denyPrivateControl(o)}
 }
 
 func filterDeniedResolveAddrs(addrs []string, o *config.Options) []string {
