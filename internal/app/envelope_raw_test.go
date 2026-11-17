@@ -271,3 +271,63 @@ func TestJSONEnvelopeRedactsSecrets(t *testing.T) {
 		}
 	}
 }
+
+func TestRawHTTPFramesContentLength(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "data", args: []string{"-d", "hello"}, want: "Content-Length: 5\r\n"},
+		{name: "json", args: []string{"--json", `{"a":1}`}, want: "Content-Length: 7\r\n"},
+		{name: "empty", args: []string{"-X", "POST"}, want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ln, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer ln.Close()
+			gotCh := make(chan string, 1)
+			go func() {
+				conn, err := ln.Accept()
+				if err != nil {
+					return
+				}
+				defer conn.Close()
+				reader := bufio.NewReader(conn)
+				var head strings.Builder
+				for {
+					line, err := reader.ReadString('\n')
+					if err != nil {
+						break
+					}
+					head.WriteString(line)
+					if line == "\r\n" {
+						break
+					}
+				}
+				gotCh <- head.String()
+				_, _ = conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"))
+			}()
+
+			args := append([]string{"-sS", "--raw-http"}, tc.args...)
+			args = append(args, "http://"+ln.Addr().String()+"/")
+			code, out, stderr := runGocurl(t, args...)
+			if code != 0 || out != "ok" {
+				t.Fatalf("code=%d out=%q stderr=%q", code, out, stderr)
+			}
+			head := <-gotCh
+			if tc.want == "" {
+				if strings.Contains(head, "Content-Length") {
+					t.Fatalf("unexpected Content-Length: %q", head)
+				}
+				return
+			}
+			if !strings.Contains(head, tc.want) {
+				t.Fatalf("missing %q in request:\n%s", tc.want, head)
+			}
+		})
+	}
+}

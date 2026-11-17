@@ -166,7 +166,7 @@ func runRawHTTP(o *config.Options, u *url.URL, idx int, stdout, stderr io.Writer
 				continue
 			}
 			written[lower] = true
-			writeRawHeader(&request, req.Header, name)
+			writeRawHeader(&request, req.Header, name, req.ContentLength)
 		}
 		for name := range req.Header {
 			lower := strings.ToLower(name)
@@ -174,7 +174,10 @@ func runRawHTTP(o *config.Options, u *url.URL, idx int, stdout, stderr io.Writer
 				continue
 			}
 			written[lower] = true
-			writeRawHeader(&request, req.Header, name)
+			writeRawHeader(&request, req.Header, name, req.ContentLength)
+		}
+		if req.ContentLength > 0 && !written["content-length"] {
+			fmt.Fprintf(&request, "Content-Length: %d\r\n", req.ContentLength)
 		}
 		request.WriteString("\r\n")
 		request.Write(body)
@@ -280,7 +283,7 @@ func validateRawRequest(req *fhttp.Request, target string) error {
 	return nil
 }
 
-func writeRawHeader(w *bytes.Buffer, headers fhttp.Header, name string) {
+func writeRawHeader(w *bytes.Buffer, headers fhttp.Header, name string, contentLength int64) {
 	var values []string
 	for key, vals := range headers {
 		if strings.EqualFold(key, name) {
@@ -288,10 +291,13 @@ func writeRawHeader(w *bytes.Buffer, headers fhttp.Header, name string) {
 			break
 		}
 	}
+	canonical := fhttp.CanonicalHeaderKey(name)
 	if len(values) == 0 {
+		if strings.EqualFold(canonical, "Content-Length") && contentLength > 0 {
+			fmt.Fprintf(w, "%s: %d\r\n", canonical, contentLength)
+		}
 		return
 	}
-	canonical := fhttp.CanonicalHeaderKey(name)
 	for _, value := range values {
 		fmt.Fprintf(w, "%s: %s\r\n", canonical, value)
 	}
