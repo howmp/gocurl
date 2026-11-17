@@ -300,6 +300,10 @@ func (s *daemonState) handleConn(conn net.Conn) {
 const (
 	MaxConnections       = 64
 	maxDaemonRequestBody = 32 << 20
+	// maxDaemonRequestDuration bounds a single request when the client sets
+	// no --max-time, so a slow remote cannot pin a shared connection slot
+	// indefinitely.
+	maxDaemonRequestDuration = 24 * time.Hour
 )
 
 var daemonBodySem = make(chan struct{}, 4)
@@ -356,7 +360,7 @@ func (s *daemonState) handleRequest(conn net.Conn, br *bufio.Reader, bw *bufio.W
 	if o.MaxTime > 0 {
 		_ = conn.SetDeadline(time.Now().Add(o.MaxTime + 5*time.Second))
 	} else {
-		_ = conn.SetDeadline(time.Time{})
+		_ = conn.SetDeadline(time.Now().Add(maxDaemonRequestDuration))
 	}
 	o.CookieJar = s.jar
 	u, err := url.Parse(req.URL)
