@@ -161,7 +161,21 @@ func resolveConfigPath(path string, depth int, baseDir, rootDir string) (resolve
 	}
 	path = filepath.Clean(path)
 	if rootDir != "" {
-		inside, relErr := pathWithin(rootDir, path)
+		// Compare canonical paths so a symlinked intermediate directory
+		// cannot carry an include outside the config root.
+		resolvedRoot := rootDir
+		if real, err := filepath.EvalSymlinks(rootDir); err == nil {
+			resolvedRoot = real
+		}
+		resolvedPath := path
+		if real, err := filepath.EvalSymlinks(path); err == nil {
+			resolvedPath = real
+		} else {
+			if real, err := filepath.EvalSymlinks(filepath.Dir(path)); err == nil {
+				resolvedPath = filepath.Join(real, filepath.Base(path))
+			}
+		}
+		inside, relErr := pathWithin(resolvedRoot, resolvedPath)
 		if relErr != nil {
 			return "", "", "", relErr
 		}
