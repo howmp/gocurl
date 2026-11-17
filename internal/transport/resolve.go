@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 
 	"gocurl/internal/config"
 )
@@ -41,7 +42,11 @@ func resolveCandidates(ctx context.Context, o *config.Options, host, port string
 			return dialCandidates{}, err
 		}
 	}
-	target.addrs = filterDeniedResolveAddrs(ResolveAddresses(o, target.host, target.port), o)
+	resolved := ResolveAddresses(o, target.host, target.port)
+	target.addrs = filterDeniedResolveAddrs(resolved, o)
+	if len(resolved) > 0 && len(target.addrs) == 0 {
+		return dialCandidates{}, fmt.Errorf("private address denied: --resolve maps %s to %s", target.host, strings.Join(resolved, ","))
+	}
 	if len(target.addrs) == 0 && HasCustomDNS(o) && net.ParseIP(target.host) == nil {
 		ips, err := ResolveHostIPs(ctx, o, target.host)
 		if err != nil {

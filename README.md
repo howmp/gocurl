@@ -449,8 +449,10 @@ GOCURL_DAEMON_LOG=file    覆盖日志路径
   超限返回 63。FTP 暂不支持 `--netrc`。
 - HTTP 的 `--max-filesize` 限制的是解码后的响应体大小；未设置时默认不设上限。
 - `--deny-private-addresses` 默认关闭以保持 curl 兼容；开启后拒绝环回、私网、
-  链路本地、未指定、组播和 CGNAT 目标（直连、DoH、自定义 DNS、`--resolve`/
-  `--connect-to`）。`--doh-url` 必须是 HTTPS，且不接受 userinfo 或 fragment。
+  链路本地、未指定、组播、CGNAT、保留网段与 IPv4 内嵌 IPv6 目标（直连、daemon、
+  DoH、自定义 DNS、`--resolve`/`--connect-to`）。带 zone 的 IPv6 字面量会先剥离
+  zone 再判定。无法解析的地址按拒绝处理。`--doh-url` 必须是 HTTPS，且不接受
+  userinfo 或 fragment。
 - `--post301/302/303` 是显式保留方法/包体的开关，跨主机重定向时同样生效；
   不需要跨源重放时不要开启。`--no-location` 会同时清除 `--location-trusted`
   建立的状态。

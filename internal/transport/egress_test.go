@@ -54,6 +54,57 @@ func TestQueryDoHDeniesPrivateEndpoint(t *testing.T) {
 	}
 }
 
+func TestPrivateAddressDeniedCoversEmbeddedIPv4(t *testing.T) {
+	denied := []string{
+		"127.0.0.1",
+		"10.0.0.1",
+		"169.254.169.254",
+		"100.64.0.1",
+		"0.0.0.0",
+		"255.255.255.255",
+		"240.0.0.1",
+		"198.18.0.1",
+		"::1",
+		"fc00::1",
+		"fe80::1",
+		"::ffff:127.0.0.1",
+		"::127.0.0.1",
+		"64:ff9b::7f00:1",
+		"64:ff9b::a00:1",
+		"2002:7f00:1::",
+		"2002:a00:1::",
+	}
+	for _, raw := range denied {
+		if !privateAddressDenied(net.ParseIP(raw)) {
+			t.Errorf("%s should be denied", raw)
+		}
+	}
+	if !privateAddressDenied(nil) {
+		t.Error("unparsable address must be denied")
+	}
+	if privateAddressDenied(net.ParseIP("8.8.8.8")) {
+		t.Error("public address denied")
+	}
+	if privateAddressDenied(net.ParseIP("2606:4700::1111")) {
+		t.Error("public IPv6 address denied")
+	}
+}
+
+func TestDenyPrivateControlStripsZone(t *testing.T) {
+	o := config.NewOptions()
+	o.DenyPrivateAddresses = true
+	control := denyPrivateControl(o)
+	if control == nil {
+		t.Fatal("control missing")
+	}
+	if err := control("tcp4", "[fe80::1%eth0]:80", nil); err == nil {
+		t.Fatal("zoned link-local address was not denied")
+	}
+	if err := control("tcp4", "[2606:4700::1111]:443", nil); err != nil {
+		t.Fatalf("public address denied: %v", err)
+	}
+}
+
 func TestResolveHostIPsNilOptions(t *testing.T) {
 	ips, err := ResolveHostIPs(context.Background(), nil, "127.0.0.1")
 	if err != nil || len(ips) != 1 {
