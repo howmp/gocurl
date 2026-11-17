@@ -16,7 +16,7 @@ func ReadLocalFile(path string) ([]byte, error) {
 }
 
 func ReadFile(path string) ([]byte, error) {
-	f, err := os.Open(path)
+	f, err := openLocalFile(path)
 	if err != nil {
 		return nil, err
 	}

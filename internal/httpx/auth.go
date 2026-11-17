@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/md5"
 	"crypto/rand"
 	"crypto/sha256"
@@ -52,16 +53,15 @@ func netrcCredentials(o *config.Options, host string) (string, string, bool) {
 		}
 		path = filepath.Join(home, ".netrc")
 	}
-	f, err := os.Open(path)
+	data, err := config.ReadFile(path)
 	if err != nil {
 		return "", "", false
 	}
-	defer f.Close()
 
 	machines := make(map[string]*netrcCred)
 	var defaultCred *netrcCred
 	var current *netrcCred
-	scanner := bufio.NewScanner(f)
+	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
 		fields := strings.Fields(scanner.Text())
 		for i := 0; i < len(fields); i++ {
