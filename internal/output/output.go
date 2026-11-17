@@ -240,7 +240,6 @@ func ResolveResumeOffset(o *config.Options, u *url.URL, idx int) (int64, error) 
 	if statErr != nil {
 		return 0, statErr
 	}
-	o.ResumeOffset = info.Size()
 	return info.Size(), nil
 }
 
@@ -266,7 +265,13 @@ func OutputWriter(o *config.Options, u *url.URL, idx int, stdout io.Writer) (io.
 		}
 	}
 	var f *os.File
-	if o.ContinueAtSet && o.ResumeOffset >= 0 {
+	resumeOffset, offsetErr := ResolveResumeOffset(o, u, idx)
+	if offsetErr != nil {
+		return nil, nil, offsetErr
+	}
+	if o.ContinueAtSet && resumeOffset > 0 {
+		f, err = openResumeOutput(name, resumeOffset)
+	} else if o.ContinueAtSet && o.ResumeOffset >= 0 {
 		f, err = openResumeOutput(name, o.ResumeOffset)
 	} else {
 		f, err = openOutputFile(name, o.AppendOutput, !o.AppendOutput)

@@ -289,8 +289,32 @@ func TestResolveResumeOffsetUsesOpenedFile(t *testing.T) {
 	if err != nil || offset != 4 {
 		t.Fatalf("offset=%d err=%v", offset, err)
 	}
-	if o.ResumeOffset != 4 {
-		t.Fatalf("options resume offset = %d", o.ResumeOffset)
+	if o.ResumeOffset != -1 {
+		t.Fatalf("resume offset leaked into shared options: %d", o.ResumeOffset)
+	}
+}
+
+func TestResolveResumeOffsetIsPerURL(t *testing.T) {
+	dir := t.TempDir()
+	first := filepath.Join(dir, "first")
+	second := filepath.Join(dir, "second")
+	if err := os.WriteFile(first, []byte("abc"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(second, []byte("0123456789"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	o := config.NewOptions()
+	o.Outputs = []string{first, second}
+	o.ContinueAtSet = true
+	o.ResumeOffset = -1
+	u, _ := url.Parse("https://example.test/a")
+
+	if got, err := ResolveResumeOffset(o, u, 0); err != nil || got != 3 {
+		t.Fatalf("first offset = %d err = %v", got, err)
+	}
+	if got, err := ResolveResumeOffset(o, u, 1); err != nil || got != 10 {
+		t.Fatalf("second offset = %d err = %v", got, err)
 	}
 }
 
